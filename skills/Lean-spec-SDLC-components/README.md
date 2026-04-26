@@ -2,7 +2,7 @@
 
 This folder is a portable, lean transplant kit derived from the live SDLC system in this repository.
 
-It is designed to be copied into another repo and then regrow repo-specific behavior by detecting the local environment instead of assuming GxP Sentinel structure.
+It is designed to be copied into another repo and then regrow repo-specific behavior by detecting the local environment instead of assuming the source repo's structure.
 
 ## What is included
 
@@ -47,18 +47,20 @@ That evidence should be written back into `docs/ENVIRONMENT_PROFILE.md` and then
 
 ## Routing matrix
 
-- `/orchestrate` -> prompt: n/a -> agent: `sdlc-orchestrator` -> state: `docs/SYSTEM_STATE.md`, `docs/ENVIRONMENT_PROFILE.md` -> output: routed stage plan and next-agent decision
-- `/intake` -> prompt: `receive-feature-signal` -> agent: `sdlc-orchestrator` -> state: `docs/SYSTEM_STATE.md` -> output: intake accepted, queued, or blocked
-- `/sync-spec` -> prompt: `sync-external-spec` -> agent: `spec-guardian` -> state: `docs/SYSTEM_STATE.md` and spec hierarchy -> output: spec updates with compliance handoff
-- `/plan` -> prompt: `plan-feature` -> agents: `planner`, `change-impact`, `spec-guardian` -> state: planning location and `docs/SYSTEM_STATE.md` -> output: scoped implementation plan with control points
-- `/tdd` -> prompt: n/a -> agent: `tdd-guide` -> state: tests and implementation files -> output: RED/GREEN/REFACTOR evidence
-- `/verify` -> prompt: `verify-phase` -> agent: `verify` -> state: verification artifacts and `docs/SYSTEM_STATE.md` -> output: verification verdict with failure evidence
-- `/quality-gate` -> prompt: n/a -> agent: `quality-gate` -> state: `quality/criteria.md` and `docs/SYSTEM_STATE.md` -> output: binary pass or fail gate verdict
-- `/checkpoint` -> prompt: n/a -> agent: `phase-implementation-assess` -> state: `docs/SYSTEM_STATE.md` -> output: transition readiness checkpoint
-- `/prepare-deploy` -> prompt: `prepare-for-deployment` -> agent: `deployment` -> state: `docs/SYSTEM_STATE.md` and deployment notes -> output: readiness decision and blockers
-- `/execute-deploy` -> prompt: `execute-deployment` -> agent: `deployment` -> state: `docs/SYSTEM_STATE.md` and deployment artifacts -> output: deployment execution verdict
-- `/broadcast` -> prompt: `broadcast-state` -> agent: `build-lead` -> state: `docs/SYSTEM_STATE.md` -> output: stakeholder state broadcast
-- `/learn` -> prompt: n/a -> agent: `learn` -> state: `.github/memories/`, `knowledge/`, `decisions/`, `quality/criteria.md` -> output: durable lessons and proposed system updates
+| Command | Prompt | Agent | State touched | Output |
+| --------- | -------- | ------- | --------------- | -------- |
+| `/orchestrate` | — | `sdlc-orchestrator` | `docs/SYSTEM_STATE.md`, `docs/ENVIRONMENT_PROFILE.md` | Routed stage plan and next-agent decision |
+| `/intake` | `receive-feature-signal` | `sdlc-orchestrator` | `docs/SYSTEM_STATE.md` | Intake accepted, queued, or blocked |
+| `/sync-spec` | `sync-external-spec` | `spec-guardian` | `docs/SYSTEM_STATE.md` and spec hierarchy | Spec updates with compliance handoff |
+| `/plan` | `plan-feature` | `planner`, `change-impact`, `spec-guardian` | Planning location and `docs/SYSTEM_STATE.md` | Scoped implementation plan with control points |
+| `/tdd` | — | `tdd-guide` | Tests and implementation files | RED/GREEN/REFACTOR evidence |
+| `/verify` | `verify-phase` | `verify` | Verification artifacts and `docs/SYSTEM_STATE.md` | Verification verdict with failure evidence |
+| `/quality-gate` | — | `quality-gate` | `quality/criteria.md` and `docs/SYSTEM_STATE.md` | Binary pass or fail gate verdict |
+| `/checkpoint` | — | `phase-implementation-assess` | `docs/SYSTEM_STATE.md` | Transition readiness checkpoint |
+| `/prepare-deploy` | `prepare-for-deployment` | `deployment` | `docs/SYSTEM_STATE.md` and deployment notes | Readiness decision and blockers |
+| `/execute-deploy` | `execute-deployment` | `deployment` | `docs/SYSTEM_STATE.md` and deployment artifacts | Deployment execution verdict |
+| `/broadcast` | `broadcast-state` | `build-lead` | `docs/SYSTEM_STATE.md` | Stakeholder state broadcast |
+| `/learn` | — | `learn` | `.github/memories/`, `knowledge/`, `decisions/`, `quality/criteria.md` | Durable lessons and proposed system updates |
 
 ## Key outputs in this package
 

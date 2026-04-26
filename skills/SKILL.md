@@ -101,14 +101,19 @@ They are not replacements for the stage agents; they prepare, review, and troubl
 
 Typical supervisors/viewers include:
 
+Lean baseline (ship in the transplant kit):
+
 - `Build Lead` for go/no-go, waivers, workstream readiness, and cross-spec coordination
+- `Security Lead` for auth, secrets, isolation, and exposure restrictions
+- `Platform Lead` for runtime bindings, queues, scheduled jobs, infra config, and deploy blockers
+- `Observability Lead` for logs, error codes, soak evidence, and runtime visibility
+- `Quality Lead` for acceptance evidence, test coverage, golden sets, and regression readiness
+
+Specialist additions (not shipped in the lean baseline — see "Lean Baseline Exclusions" above; add only when the target repo proves the domain is active):
+
 - `Extraction Lead` for OCR, parser, prompt-template, and extractor handoff integrity
 - `Enrichment Lead` for enriched tables, views, backfill, and queue-driven write paths
 - `MCP Lead` for tool contracts, data domains, feature flags, tiering, and runtime surface
-- `Security Lead` for auth, RLS, secrets, tenant isolation, and exposure restrictions
-- `Platform Lead` for Wrangler, queues, cron, bindings, D1, KV, and deploy blockers
-- `Observability Lead` for logs, error codes, soak evidence, and runtime visibility
-- `Quality Lead` for acceptance evidence, CT coverage, golden sets, and regression readiness
 - `Regulatory Ethics Lead` for safety language, forbidden attributes, and ethics review evidence
 
 What they do:
@@ -177,12 +182,19 @@ Commands are the user-facing hooks into the system.
 A good transplant usually includes commands such as:
 
 - `/orchestrate` for the SDLC Orchestrator
+- `/intake` for new feature signal intake before spec sync
+- `/sync-spec` for syncing external requirements into the spec hierarchy
 - `/plan` for planning-only work
 - `/tdd` for test-first implementation
 - `/verify` for build and test verification
 - `/quality-gate` for binary gate assessment
-- `/checkpoint` for workflow checkpoints
+- `/checkpoint` for phase or transition readiness assessment
+- `/prepare-deploy` for deployment readiness assessment
+- `/execute-deploy` for scoped deployment execution
+- `/broadcast` for stakeholder state broadcasts
 - `/learn` for post-deployment learning extraction
+
+Each command should be a thin wrapper that names the agent (and prompt, if any) it invokes, so the binding between command, prompt, and agent stays explicit. See the routing matrix in `Lean-spec-SDLC-components/README.md` for the canonical mapping.
 
 ### Best practice
 
@@ -423,14 +435,17 @@ These are the rules worth carrying into the next repo.
 
 Use this as the quick drop-in list for the next repo.
 
-- [ ] Add `SDLC Orchestrator`
-- [ ] Add `/orchestrate`
+- [ ] Add `SDLC Orchestrator` and `/orchestrate`
 - [ ] Add planner/spec-guardian/tdd/review/verify/gate/regression/deploy/learn agents
+- [ ] Add stage commands: `/plan`, `/tdd`, `/verify`, `/quality-gate`, `/checkpoint`, `/learn`
+- [ ] Add intake and sync commands: `/intake`, `/sync-spec`
+- [ ] Add deployment commands: `/prepare-deploy`, `/execute-deploy`
+- [ ] Add `/broadcast` for stakeholder updates
 - [ ] Add domain leads for the repo's real subsystems
 - [ ] Add workflow instructions for stage order and routing
 - [ ] Add live state file
 - [ ] Add memories, decisions, knowledge, and quality files
-- [ ] Add a command index or prompt surface
+- [ ] Add a routing matrix that maps every command to its prompt and agent
 - [ ] Add self-improvement rules for recurring incidents
 - [ ] Add default-bias language that tells users when to use orchestrator
 - [ ] Keep the stage agents and domain leads distinct

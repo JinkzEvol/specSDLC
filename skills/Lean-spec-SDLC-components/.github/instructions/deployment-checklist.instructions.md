@@ -1,5 +1,6 @@
 ---
 description: "Portable deployment readiness and execution checklist."
+applyTo: "**"
 ---
 
 # Deployment Checklist
