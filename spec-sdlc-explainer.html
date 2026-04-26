@@ -1,0 +1,1746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Spec SDLC Agent System — How spec-driven delivery actually works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0b09;
+  --bg-deep: #080705;
+  --surface: #15130f;
+  --surface-2: #1d1a14;
+  --border: #2a261e;
+  --border-soft: #1f1c16;
+  --bone: #ece5d3;
+  --bone-muted: #b8b0a0;
+  --muted: #7a7468;
+  --dim: #4a463d;
+  --copper: #d97a2c;
+  --copper-bright: #f4a460;
+  --copper-dim: #8a4d1e;
+  --sage: #8aa07e;
+  --rust: #b5462e;
+  --moss: #6b8a4a;
+  --ink: #050402;
+
+  --display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  --max: 1380px;
+  --gutter: 32px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg);
+  color: var(--bone);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.65;
+  font-feature-settings: "ss01", "ss02", "cv11";
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(1100px 600px at 85% -10%, rgba(217,122,44,.07), transparent 60%),
+    radial-gradient(900px 500px at -10% 30%, rgba(138,160,126,.04), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* ============== TYPOGRAPHY ============== */
+h1, h2, h3, h4 { font-family: var(--display); font-weight: 500; letter-spacing: -0.02em; line-height: 1.05; color: var(--bone); }
+h1 { font-size: clamp(2.4rem, 5vw, 4.4rem); font-weight: 400; font-style: italic; }
+h2 { font-size: clamp(1.8rem, 3.2vw, 2.6rem); font-weight: 500; letter-spacing: -0.025em; }
+h3 { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.015em; }
+h4 { font-size: 1.05rem; font-weight: 600; font-family: var(--body); letter-spacing: -0.01em; }
+p { color: var(--bone-muted); max-width: 68ch; }
+p + p { margin-top: 1em; }
+a { color: var(--copper-bright); text-decoration: none; border-bottom: 1px solid rgba(244,164,96,.3); transition: border-color .2s; }
+a:hover { border-bottom-color: var(--copper-bright); }
+em { color: var(--bone); font-style: italic; }
+strong { color: var(--bone); font-weight: 600; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 0.1em 0.4em; border-radius: 3px; color: var(--copper-bright); border: 1px solid var(--border-soft); }
+.kicker { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.18em; color: var(--copper); font-weight: 500; }
+.serif-italic { font-family: var(--display); font-style: italic; font-weight: 400; }
+
+/* ============== LAYOUT ============== */
+.shell { display: grid; grid-template-columns: 280px 1fr; max-width: var(--max); margin: 0 auto; min-height: 100vh; }
+@media (max-width: 980px) { .shell { grid-template-columns: 1fr; } }
+
+/* ============== SIDEBAR ============== */
+aside.nav {
+  position: sticky; top: 0; align-self: start;
+  height: 100vh; overflow-y: auto;
+  padding: 28px 8px 28px 28px;
+  border-right: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, rgba(8,7,5,0.7), rgba(12,11,9,0.7));
+  backdrop-filter: blur(8px);
+  font-size: 0.86rem;
+}
+@media (max-width: 980px) {
+  aside.nav { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--border-soft); padding: 20px; }
+}
+.nav-brand { padding-bottom: 22px; border-bottom: 1px solid var(--border-soft); margin-bottom: 18px; }
+.nav-brand .mark { font-family: var(--display); font-style: italic; font-size: 1.5rem; line-height: 1; color: var(--bone); }
+.nav-brand .mark span { color: var(--copper); }
+.nav-brand .sub { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.nav-section { margin-top: 18px; }
+.nav-section .label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); padding: 0 10px 8px; }
+.nav-section ol { list-style: none; counter-reset: navcounter; }
+.nav-section li { counter-increment: navcounter; }
+.nav-section a {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 6px 10px; color: var(--bone-muted); border: 0; border-left: 2px solid transparent;
+  transition: all .15s; font-size: 0.92rem; line-height: 1.3;
+}
+.nav-section a::before {
+  content: counter(navcounter, decimal-leading-zero);
+  font-family: var(--mono); font-size: 0.7rem; color: var(--dim); flex-shrink: 0;
+}
+.nav-section a:hover { color: var(--bone); border-left-color: var(--copper-dim); background: rgba(217,122,44,0.04); }
+.nav-section a.active { color: var(--copper-bright); border-left-color: var(--copper); background: rgba(217,122,44,0.06); }
+
+/* ============== MAIN CONTENT ============== */
+main { padding: 80px clamp(24px, 5vw, 80px) 120px; max-width: 1100px; }
+section.block { padding: 80px 0; border-bottom: 1px solid var(--border-soft); }
+section.block:first-of-type { padding-top: 0; }
+section.block:last-of-type { border-bottom: 0; }
+.kicker-wrap { margin-bottom: 18px; display: flex; align-items: center; gap: 14px; }
+.kicker-wrap::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--copper-dim), transparent); }
+.lede { font-family: var(--display); font-size: clamp(1.15rem, 1.8vw, 1.4rem); line-height: 1.45; color: var(--bone); font-weight: 300; max-width: 60ch; margin-top: 24px; letter-spacing: -0.01em; }
+.lede em { color: var(--copper-bright); font-style: italic; }
+
+/* ============== HERO ============== */
+.hero { padding: 90px 0 60px; }
+.hero .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--border-soft); }
+.hero .meta div { font-size: 0.86rem; }
+.hero .meta .lbl { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.hero .meta .val { color: var(--bone); font-family: var(--display); font-size: 1.05rem; }
+.hero-quote {
+  margin-top: 44px; padding: 26px 28px; border-left: 2px solid var(--copper);
+  background: linear-gradient(90deg, rgba(217,122,44,0.06), transparent 70%);
+  font-family: var(--display); font-style: italic; font-size: 1.15rem; color: var(--bone); line-height: 1.5;
+}
+
+/* ============== TLDR / SUMMARY CARDS ============== */
+.tldr {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--copper);
+  padding: 22px 26px; margin: 30px 0; border-radius: 2px;
+  position: relative;
+}
+.tldr .tag { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--copper); margin-bottom: 8px; }
+.tldr p { color: var(--bone); font-family: var(--display); font-size: 1.08rem; line-height: 1.5; max-width: 70ch; font-weight: 300; }
+
+/* ============== DIAGRAMS ============== */
+.diagram { margin: 40px 0; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow-x: auto; }
+.diagram svg { display: block; max-width: 100%; height: auto; }
+.diagram .caption { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 16px; text-align: center; }
+
+/* ============== LAYER CARDS (4 layers) ============== */
+.layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 30px; }
+.layer-card {
+  padding: 22px; background: var(--surface); border: 1px solid var(--border);
+  border-top: 3px solid var(--layer-c); border-radius: 2px; position: relative;
+  transition: transform .2s, border-color .2s;
+}
+.layer-card:hover { transform: translateY(-2px); border-color: var(--layer-c); }
+.layer-card .num { font-family: var(--mono); font-size: 0.7rem; color: var(--layer-c); letter-spacing: 0.15em; }
+.layer-card h3 { margin: 8px 0 12px; font-size: 1.2rem; }
+.layer-card p { font-size: 0.92rem; color: var(--bone-muted); }
+.layer-card .roles { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-soft); font-family: var(--mono); font-size: 0.74rem; color: var(--muted); line-height: 1.7; }
+.layer-card.l1 { --layer-c: #c47a2e; }
+.layer-card.l2 { --layer-c: #6b8a4a; }
+.layer-card.l3 { --layer-c: #8aa07e; }
+.layer-card.l4 { --layer-c: #b5462e; }
+
+/* ============== AGENT CATALOG ============== */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 30px; padding-bottom: 18px; border-bottom: 1px solid var(--border-soft); }
+.chip {
+  padding: 7px 14px; background: var(--surface); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.06em; color: var(--bone-muted);
+  cursor: pointer; transition: all .15s; border-radius: 2px;
+}
+.chip:hover { border-color: var(--copper-dim); color: var(--bone); }
+.chip.active { background: var(--copper); border-color: var(--copper); color: var(--ink); font-weight: 500; }
+.chip .ct { color: var(--muted); margin-left: 6px; }
+.chip.active .ct { color: var(--ink); opacity: 0.65; }
+
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.agent {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+  padding: 18px 20px; transition: all .15s; cursor: pointer; position: relative;
+  border-left: 3px solid var(--cat-c, var(--border));
+}
+.agent:hover { background: var(--surface-2); border-left-color: var(--copper); }
+.agent[open] { background: var(--surface-2); border-left-color: var(--copper); }
+.agent summary {
+  list-style: none; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+}
+.agent summary::-webkit-details-marker { display: none; }
+.agent .name { font-family: var(--display); font-size: 1.15rem; font-weight: 500; color: var(--bone); letter-spacing: -0.01em; }
+.agent .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.agent .tagx { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cat-c, var(--muted)); }
+.agent .arrow { color: var(--muted); font-size: 1.1rem; transition: transform .2s; flex-shrink: 0; line-height: 1.4; }
+.agent[open] .arrow { transform: rotate(45deg); color: var(--copper); }
+.agent .body { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.agent .body p { font-size: 0.92rem; color: var(--bone-muted); margin-bottom: 10px; }
+.agent .body .when { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); margin-top: 10px; }
+.agent .body .when strong { color: var(--copper-bright); font-weight: 500; }
+
+/* category colors */
+.agent.cat-control { --cat-c: #d97a2c; }
+.agent.cat-spec    { --cat-c: #c4a85e; }
+.agent.cat-stage   { --cat-c: #8aa07e; }
+.agent.cat-domain  { --cat-c: #6c8aa0; }
+.agent.cat-learn   { --cat-c: #a07e8a; }
+
+/* ============== PIPELINE ============== */
+.pipeline {
+  margin: 36px 0; padding: 30px 24px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+  overflow-x: auto;
+}
+.pipeline-track {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(140px, 1fr);
+  gap: 10px; min-width: 1100px;
+}
+.stage-cell {
+  padding: 14px 12px; background: var(--bg-deep); border: 1px solid var(--border-soft); border-radius: 2px;
+  border-top: 2px solid var(--stage-c);
+  transition: all .2s; cursor: default;
+}
+.stage-cell:hover { border-top-color: var(--copper); background: var(--surface-2); }
+.stage-cell .n { font-family: var(--mono); font-size: 0.7rem; color: var(--stage-c); letter-spacing: 0.1em; }
+.stage-cell .nm { font-family: var(--display); font-weight: 500; font-size: 1rem; color: var(--bone); margin-top: 4px; line-height: 1.15; }
+.stage-cell .who { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+.stage-cell.s-spec { --stage-c: #c4a85e; }
+.stage-cell.s-impl { --stage-c: #8aa07e; }
+.stage-cell.s-verify { --stage-c: #6c8aa0; }
+.stage-cell.s-deploy { --stage-c: #d97a2c; }
+.stage-cell.s-learn { --stage-c: #a07e8a; }
+
+/* ============== TWO-COL ============== */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; }
+@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+.col-card { padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; }
+.col-card h4 { margin-bottom: 10px; font-family: var(--display); font-size: 1.15rem; font-weight: 500; }
+.col-card p { font-size: 0.94rem; }
+.col-card ul { list-style: none; margin-top: 12px; }
+.col-card li { padding: 4px 0 4px 16px; font-size: 0.9rem; color: var(--bone-muted); position: relative; }
+.col-card li::before { content: "·"; position: absolute; left: 4px; color: var(--copper); font-weight: 700; }
+
+/* ============== SPEC ANATOMY TABLE ============== */
+.spec-anatomy { margin-top: 26px; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.spec-row {
+  display: grid; grid-template-columns: 80px 1.2fr 2fr 1.5fr;
+  gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--border-soft);
+  background: var(--surface); align-items: start;
+}
+.spec-row:last-child { border-bottom: 0; }
+.spec-row:hover { background: var(--surface-2); }
+.spec-row.head { background: var(--bg-deep); font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); padding: 12px 22px; }
+.spec-row.head:hover { background: var(--bg-deep); }
+.spec-row .num { font-family: var(--mono); color: var(--copper); font-weight: 500; font-size: 0.95rem; }
+.spec-row .name { font-family: var(--display); font-weight: 500; color: var(--bone); font-size: 1.02rem; line-height: 1.3; }
+.spec-row .does { font-size: 0.92rem; color: var(--bone-muted); line-height: 1.55; }
+.spec-row .who { font-size: 0.86rem; color: var(--bone-muted); }
+.spec-row .who .agent-tag {
+  display: inline-block; font-family: var(--mono); font-size: 0.7rem; padding: 2px 7px;
+  background: rgba(217,122,44,0.1); border: 1px solid rgba(217,122,44,0.25); color: var(--copper-bright); border-radius: 2px;
+  margin: 2px 4px 2px 0;
+}
+@media (max-width: 760px) {
+  .spec-row { grid-template-columns: 1fr; gap: 6px; }
+  .spec-row.head { display: none; }
+  .spec-row .num { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; }
+}
+
+/* ============== LANES ============== */
+.lane-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; margin-top: 26px; }
+.lane {
+  background: var(--surface); border: 1px solid var(--border); padding: 16px 18px; border-radius: 3px;
+  border-top: 3px solid var(--lane-c, var(--copper));
+  transition: all .15s;
+}
+.lane:hover { transform: translateY(-2px); border-top-color: var(--copper-bright); }
+.lane .lid { font-family: var(--mono); font-size: 0.74rem; color: var(--lane-c, var(--copper)); letter-spacing: 0.08em; }
+.lane .lname { font-family: var(--display); font-size: 1.1rem; color: var(--bone); margin: 4px 0 8px; font-weight: 500; }
+.lane .lown { font-size: 0.86rem; color: var(--bone-muted); line-height: 1.5; margin-bottom: 10px; }
+.lane .lpath { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); line-height: 1.7; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.lane .lpath span { color: var(--copper-bright); }
+.lane.la-platform  { --lane-c: #c47a2e; }
+.lane.la-ui        { --lane-c: #c4a85e; }
+.lane.la-contracts { --lane-c: #d97a2c; }
+.lane.la-bff       { --lane-c: #8aa07e; }
+.lane.la-mcp       { --lane-c: #6b8a4a; }
+.lane.la-orch      { --lane-c: #b5462e; }
+.lane.la-data      { --lane-c: #6c8aa0; }
+.lane.la-eval      { --lane-c: #a07e8a; }
+.lane.la-verify    { --lane-c: #c4a85e; }
+.lane.la-spec      { --lane-c: #d97a2c; }
+
+/* ============== WORKED EXAMPLE ============== */
+.we-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 30px 0 0; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; }
+.we-tab {
+  padding: 8px 14px; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--bone-muted); cursor: pointer; transition: all .15s; border-radius: 2px; border: 0; background: transparent;
+}
+.we-tab:hover { color: var(--bone); background: var(--surface-2); }
+.we-tab.active { background: var(--copper); color: var(--ink); font-weight: 600; }
+.we-step {
+  display: none; padding: 30px 28px; background: var(--surface); border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 3px 3px; animation: fade .25s;
+}
+.we-step.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.we-step .step-no { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--copper); }
+.we-step .step-h { font-family: var(--display); font-size: 1.6rem; font-weight: 500; margin: 6px 0 16px; line-height: 1.15; }
+.we-step .step-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 14px 0;
+  margin-bottom: 16px; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft);
+  font-size: 0.86rem;
+}
+.we-step .step-meta span { color: var(--bone-muted); }
+.we-step .step-meta .ml { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+.we-step .step-meta strong { color: var(--copper-bright); font-weight: 500; }
+.we-step h5 { font-family: var(--body); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--copper); margin: 18px 0 10px; }
+.we-step ul { list-style: none; }
+.we-step li { padding: 6px 0 6px 22px; position: relative; color: var(--bone-muted); font-size: 0.94rem; line-height: 1.55; }
+.we-step li::before { content: "→"; position: absolute; left: 0; color: var(--copper); font-family: var(--mono); }
+.we-step pre {
+  font-family: var(--mono); font-size: 0.82rem; background: var(--bg-deep); padding: 18px 20px;
+  border-radius: 3px; border: 1px solid var(--border); margin: 14px 0; overflow-x: auto;
+  color: var(--bone); line-height: 1.6;
+}
+.we-step pre .com { color: var(--muted); font-style: italic; }
+.we-step pre .key { color: var(--copper-bright); }
+
+/* ============== SELF-IMPROVEMENT FLOW ============== */
+.flow {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 30px;
+}
+.flow-node {
+  padding: 14px 12px; text-align: center; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 3px; font-size: 0.84rem;
+}
+.flow-node .nlbl { font-family: var(--mono); font-size: 0.66rem; color: var(--copper); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+.flow-node .nval { font-family: var(--display); color: var(--bone); font-size: 0.95rem; line-height: 1.2; }
+@media (max-width: 900px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+
+/* ============== GLOSSARY ============== */
+.glossary { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0; margin-top: 26px; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.gloss-item { padding: 16px 20px; border-right: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); background: var(--surface); }
+.gloss-item:hover { background: var(--surface-2); }
+.gloss-item dt { font-family: var(--mono); font-size: 0.78rem; color: var(--copper-bright); letter-spacing: 0.06em; margin-bottom: 4px; }
+.gloss-item dd { font-size: 0.86rem; color: var(--bone-muted); line-height: 1.5; }
+
+/* ============== FOOTER ============== */
+footer {
+  padding: 60px clamp(24px, 5vw, 80px) 80px; border-top: 1px solid var(--border-soft);
+  background: var(--bg-deep); margin-top: 40px;
+}
+footer .ft-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 40px; max-width: 1100px; }
+@media (max-width: 760px) { footer .ft-grid { grid-template-columns: 1fr; } }
+footer .ft-mark { font-family: var(--display); font-style: italic; font-size: 1.5rem; color: var(--bone); }
+footer .ft-mark span { color: var(--copper); }
+footer p { font-size: 0.86rem; color: var(--muted); }
+
+/* ============== BLOCKQUOTE / CALLOUT ============== */
+.callout {
+  margin: 28px 0; padding: 20px 24px; background: rgba(180,70,46,0.05);
+  border-left: 3px solid var(--rust); border-radius: 0 2px 2px 0;
+}
+.callout .cl { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--rust); margin-bottom: 6px; }
+.callout p { color: var(--bone); font-size: 0.95rem; }
+
+/* ============== RULES LIST ============== */
+.rules { margin-top: 24px; }
+.rule {
+  display: grid; grid-template-columns: 64px 1fr; gap: 18px; padding: 18px 0;
+  border-bottom: 1px solid var(--border-soft); align-items: start;
+}
+.rule:last-child { border-bottom: 0; }
+.rule .num { font-family: var(--display); font-size: 2rem; color: var(--copper-dim); font-weight: 300; line-height: 1; font-style: italic; }
+.rule .ct { color: var(--bone); font-size: 1rem; }
+.rule .ct strong { color: var(--bone); display: block; margin-bottom: 4px; font-family: var(--display); font-weight: 500; font-size: 1.05rem; }
+.rule .ct span { color: var(--bone-muted); font-size: 0.92rem; }
+
+/* ============== UTILITY ============== */
+.spacer-lg { height: 60px; }
+.divider { height: 1px; background: var(--border-soft); margin: 30px 0; }
+.hidden { display: none !important; }
+::selection { background: rgba(217,122,44,0.4); color: var(--bone); }
+
+/* ============== SCROLLBAR ============== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--copper-dim); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+<!-- ====================== SIDEBAR NAV ====================== -->
+<aside class="nav" id="nav">
+  <div class="nav-brand">
+    <div class="mark">spec<span>·</span>SDLC</div>
+    <div class="sub">Portable spec-driven delivery kit</div>
+  </div>
+  <div class="nav-section">
+    <div class="label">Foundations</div>
+    <ol>
+      <li><a href="#intro">What this is</a></li>
+      <li><a href="#mental-model">The mental model</a></li>
+      <li><a href="#why">Why a system at all</a></li>
+    </ol>
+  </div>
+  <div class="nav-section">
+    <div class="label">The Spec</div>
+    <ol>
+      <li><a href="#spec-role">Role of the spec</a></li>
+      <li><a href="#spec-anatomy">Anatomy of the kit</a></li>
+    </ol>
+  </div>
+  <div class="nav-section">
+    <div class="label">Agent System</div>
+    <ol>
+      <li><a href="#layers">Four agent layers</a></li>
+      <li><a href="#catalog">Agent catalog</a></li>
+      <li><a href="#prompts">Prompts</a></li>
+      <li><a href="#commands">Commands</a></li>
+      <li><a href="#instructions">Instructions</a></li>
+    </ol>
+  </div>
+  <div class="nav-section">
+    <div class="label">In Motion</div>
+    <ol>
+      <li><a href="#pipeline">SDLC pipeline</a></li>
+      <li><a href="#orchestrate">Orchestrate flow</a></li>
+      <li><a href="#lanes">Parallel lanes</a></li>
+      <li><a href="#worked">Worked example</a></li>
+    </ol>
+  </div>
+  <div class="nav-section">
+    <div class="label">Continuity</div>
+    <ol>
+      <li><a href="#state">State &amp; memory</a></li>
+      <li><a href="#learn">Self-improvement</a></li>
+      <li><a href="#glossary">Quick reference</a></li>
+    </ol>
+  </div>
+</aside>
+
+<!-- ====================== MAIN ====================== -->
+<main>
+
+<!-- ============ HERO ============ -->
+<section class="block hero" id="intro">
+  <div class="kicker">An explainer for engineering teams · v1.0</div>
+  <h1>How a portable spec, a roster of <span class="serif-italic" style="color:var(--copper-bright)">narrow agents</span>, and a strict workflow combine to deliver software autonomously — without losing the plot.</h1>
+  <div class="lede">
+    Spec SDLC is not a single AI that "writes code." It is a <em>portable workflow factory</em>: a typed spec defines the truth, prompts and commands route work, narrow agents do the work, gates check the work, and a memory layer keeps yesterday's lessons attached to tomorrow's decisions. The whole kit is designed to be transplanted into any repository and regrow repo-specific behaviour.
+  </div>
+  <div class="hero-quote">
+    "The orchestrator decides the route. Spec creators define it. Stage operatives walk it. Domain leads confirm it is safe. Memory preserves what the route taught you."
+  </div>
+  <div class="meta">
+    <div><div class="lbl">Package</div><div class="val">Lean Spec SDLC v1.0</div></div>
+    <div><div class="lbl">Total agents</div><div class="val">22 narrow roles</div></div>
+    <div><div class="lbl">Read time</div><div class="val">≈ 25 min</div></div>
+  </div>
+</section>
+
+<!-- ============ MENTAL MODEL ============ -->
+<section class="block" id="mental-model">
+  <div class="kicker-wrap"><span class="kicker">§01 · Mental model</span></div>
+  <h2>Three artefacts. Four agent layers. One loop.</h2>
+  <p style="margin-top:18px;">Hold this image and the rest of the document is just elaboration. Spec SDLC has three durable artefacts that change shape over time, four cooperating agent layers that act on those artefacts, and one continuous learning loop that makes the system better at acting. Crucially, the kit is designed to be <em>transplanted</em> — copied into a new repo, profiled against that repo's environment, and put to work without dragging along the assumptions of its source.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 880 460" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 Z" fill="#d97a2c"/>
+        </marker>
+        <linearGradient id="lg1" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#1d1a14"/>
+          <stop offset="100%" stop-color="#15130f"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Spec column -->
+      <rect x="20" y="40" width="200" height="380" fill="url(#lg1)" stroke="#2a261e" rx="3"/>
+      <text x="120" y="70" text-anchor="middle" fill="#d97a2c" font-family="JetBrains Mono" font-size="11" letter-spacing="2">SPEC</text>
+      <text x="120" y="100" text-anchor="middle" fill="#ece5d3" font-family="Fraunces" font-size="20" font-style="italic">The truth</text>
+      <line x1="40" y1="120" x2="200" y2="120" stroke="#2a261e"/>
+      <text x="40" y="150" fill="#b8b0a0" font-family="Inter Tight" font-size="13">Operating principles</text>
+      <text x="40" y="175" fill="#b8b0a0" font-family="Inter Tight" font-size="13">Functional requirements</text>
+      <text x="40" y="200" fill="#b8b0a0" font-family="Inter Tight" font-size="13">Shared contracts</text>
+      <text x="40" y="225" fill="#b8b0a0" font-family="Inter Tight" font-size="13">Phase plan + gates</text>
+      <text x="40" y="250" fill="#b8b0a0" font-family="Inter Tight" font-size="13">Tests &amp; evals</text>
+      <text x="40" y="275" fill="#b8b0a0" font-family="Inter Tight" font-size="13">ADRs</text>
+      <text x="40" y="300" fill="#b8b0a0" font-family="Inter Tight" font-size="13">Lane ownership</text>
+      <text x="40" y="395" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">DOCS / SPECS / CONTRACTS</text>
+
+      <!-- Agents column -->
+      <rect x="240" y="40" width="380" height="380" fill="url(#lg1)" stroke="#2a261e" rx="3"/>
+      <text x="430" y="70" text-anchor="middle" fill="#d97a2c" font-family="JetBrains Mono" font-size="11" letter-spacing="2">AGENT SYSTEM</text>
+      <text x="430" y="100" text-anchor="middle" fill="#ece5d3" font-family="Fraunces" font-size="20" font-style="italic">The labour</text>
+      <line x1="260" y1="120" x2="600" y2="120" stroke="#2a261e"/>
+
+      <!-- Layer 1 -->
+      <rect x="260" y="135" width="340" height="55" fill="#15130f" stroke="#c47a2e" stroke-width="1.5" rx="2"/>
+      <text x="270" y="155" fill="#c47a2e" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">L1 · CONTROL PLANE</text>
+      <text x="270" y="178" fill="#ece5d3" font-family="Inter Tight" font-size="13">SDLC Orchestrator · Build Lead</text>
+
+      <!-- Layer 2 -->
+      <rect x="260" y="200" width="340" height="55" fill="#15130f" stroke="#c4a85e" stroke-width="1.5" rx="2"/>
+      <text x="270" y="220" fill="#c4a85e" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">L2 · SPEC CREATORS</text>
+      <text x="270" y="243" fill="#ece5d3" font-family="Inter Tight" font-size="13">Change Impact · Planner · Spec Guardian · Architect</text>
+
+      <!-- Layer 3 -->
+      <rect x="260" y="265" width="340" height="55" fill="#15130f" stroke="#8aa07e" stroke-width="1.5" rx="2"/>
+      <text x="270" y="285" fill="#8aa07e" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">L3 · STAGE OPERATIVES</text>
+      <text x="270" y="308" fill="#ece5d3" font-family="Inter Tight" font-size="13">TDD · Code Review · Verify · Quality Gate · Deploy · Learn</text>
+
+      <!-- Layer 4 -->
+      <rect x="260" y="330" width="340" height="55" fill="#15130f" stroke="#6c8aa0" stroke-width="1.5" rx="2"/>
+      <text x="270" y="350" fill="#6c8aa0" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">L4 · DOMAIN LEADS</text>
+      <text x="270" y="373" fill="#ece5d3" font-family="Inter Tight" font-size="13">Platform · Security · Quality · Observability</text>
+
+      <text x="430" y="410" text-anchor="middle" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">22 NARROW AGENTS · ONE CONTROL PLANE</text>
+
+      <!-- State / Memory column -->
+      <rect x="640" y="40" width="220" height="380" fill="url(#lg1)" stroke="#2a261e" rx="3"/>
+      <text x="750" y="70" text-anchor="middle" fill="#d97a2c" font-family="JetBrains Mono" font-size="11" letter-spacing="2">STATE</text>
+      <text x="750" y="100" text-anchor="middle" fill="#ece5d3" font-family="Fraunces" font-size="20" font-style="italic">The memory</text>
+      <line x1="660" y1="120" x2="840" y2="120" stroke="#2a261e"/>
+      <text x="660" y="150" fill="#b8b0a0" font-family="Inter Tight" font-size="13">SYSTEM_STATE.md</text>
+      <text x="660" y="175" fill="#b8b0a0" font-family="Inter Tight" font-size="13">ENVIRONMENT_PROFILE</text>
+      <text x="660" y="200" fill="#b8b0a0" font-family="Inter Tight" font-size="13">DRIFT_REPORT.md</text>
+      <text x="660" y="225" fill="#b8b0a0" font-family="Inter Tight" font-size="13">RELEASE_READINESS</text>
+      <text x="660" y="250" fill="#b8b0a0" font-family="Inter Tight" font-size="13">DECISION_LOG</text>
+      <text x="660" y="275" fill="#b8b0a0" font-family="Inter Tight" font-size="13">memories/</text>
+      <text x="660" y="300" fill="#b8b0a0" font-family="Inter Tight" font-size="13">knowledge/</text>
+      <text x="660" y="395" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">LIVE STATUS · LESSONS</text>
+
+      <!-- Arrows: spec drives agents -->
+      <path d="M 220 230 L 250 230" stroke="#d97a2c" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+      <!-- Arrows: agents update state -->
+      <path d="M 610 230 L 640 230" stroke="#d97a2c" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+      <!-- Loop arrow: state back to spec -->
+      <path d="M 750 40 Q 750 20 600 20 Q 120 20 120 40" stroke="#d97a2c" stroke-width="1" stroke-dasharray="4 3" fill="none" marker-end="url(#arr)"/>
+      <text x="430" y="14" text-anchor="middle" fill="#d97a2c" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">LEARNING LOOP</text>
+    </svg>
+    <div class="caption">Spec → Agents → State → back to Spec. The dashed arc is what makes this a system, not a workflow.</div>
+  </div>
+</section>
+
+<!-- ============ WHY ============ -->
+<section class="block" id="why">
+  <div class="kicker-wrap"><span class="kicker">§02 · The argument</span></div>
+  <h2>Why a system, instead of just "an AI coder"?</h2>
+  <div class="tldr">
+    <div class="tag">TL;DR</div>
+    <p>One generalist agent forgets, drifts, and silently fails. A roster of narrow agents bound to a typed spec, governed by an orchestrator and audited by gates, produces evidence — not vibes. And because spec SDLC is portable, the same discipline travels with the kit into every repo it lands in.</p>
+  </div>
+  <div class="two-col">
+    <div class="col-card">
+      <h4>The failure modes a system prevents</h4>
+      <ul>
+        <li>Code outruns the spec; no one notices</li>
+        <li>Tests skipped to "make it pass"</li>
+        <li>Two parallel agents stomp on the same file</li>
+        <li>Status docs become fiction</li>
+        <li>One incident, then the same incident again next month</li>
+        <li>Lessons trapped in chat history instead of repo memory</li>
+        <li>Generic best-practice copied without regrowing repo specifics</li>
+      </ul>
+    </div>
+    <div class="col-card">
+      <h4>The discipline this system imposes</h4>
+      <ul>
+        <li>Specs lead, code follows</li>
+        <li>Every gate decision is evidence-backed</li>
+        <li>One primary lane per work packet</li>
+        <li>Status files are version-controlled truth</li>
+        <li>Lessons promote into memory, knowledge, decisions, or rules</li>
+        <li>The orchestrator is the default, not a last resort</li>
+        <li>Environment profile re-grows assumptions on transplant</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ROLE OF THE SPEC ============ -->
+<section class="block" id="spec-role">
+  <div class="kicker-wrap"><span class="kicker">§03 · The spec</span></div>
+  <h2>The spec is the constitution. Everything else is enforcement.</h2>
+  <p style="margin-top:18px;">The spec is not a "design doc that the team reads once." It is the <em>operating contract</em> the agents read on every run. Every functional requirement maps to a contract test or eval; every gate decision is anchored in spec phases; every shared type is defined once and imported everywhere.</p>
+  <p>In a transplanted kit, the spec is whatever the host repo declares it to be — a product requirements doc, an architecture book, a phase plan, a build constitution, or a combination — and the spec hierarchy is recorded in <code>docs/ENVIRONMENT_PROFILE.md</code> so every agent reads from the same source of truth.</p>
+  <div class="tldr">
+    <div class="tag">The reading rule</div>
+    <p>Before the orchestrator does anything, it reads the spec hierarchy. A request that contradicts the spec doesn't get implemented — it raises a <em>variance</em> that updates the spec first.</p>
+  </div>
+</section>
+
+<!-- ============ SPEC ANATOMY ============ -->
+<section class="block" id="spec-anatomy">
+  <div class="kicker-wrap"><span class="kicker">§04 · Anatomy of the kit</span></div>
+  <h2>What every component of the spec SDLC kit actually <span class="serif-italic" style="color:var(--copper-bright)">does</span>.</h2>
+  <p style="margin-top:18px;">Spec SDLC ships as a small, deliberately lean transplant package. Each component plays a specific role in the agent workflow. This table is the Rosetta Stone — read it once and the kit stops looking like a pile of folders.</p>
+
+  <div class="spec-anatomy">
+    <div class="spec-row head">
+      <div>Path</div><div>Component</div><div>Job in the system</div><div>Primary consumer</div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">.github/<br>agents/</div>
+      <div class="name">Agent definitions</div>
+      <div class="does">Twenty-two narrow agents in markdown — orchestrator, build lead, spec creators, stage operatives, domain leads, learning agents. Each agent declares its scope, hard rules, inputs, outputs, and the verdicts it is allowed to issue.</div>
+      <div class="who"><span class="agent-tag">SDLC Orchestrator</span><span class="agent-tag">All routing</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">.github/<br>prompts/</div>
+      <div class="name">Workflow prompts</div>
+      <div class="does">Structured recipes for recurring multi-step workflows: <code>receive-feature-signal</code>, <code>sync-external-spec</code>, <code>plan-feature</code>, <code>verify-phase</code>, <code>prepare-for-deployment</code>, <code>execute-deployment</code>, <code>broadcast-state</code>. Prompts ensure the same workflow is run the same way every time.</div>
+      <div class="who"><span class="agent-tag">Orchestrator</span><span class="agent-tag">Build Lead</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">.github/<br>instructions/</div>
+      <div class="name">Standards layer</div>
+      <div class="does">House rules that cross every agent and prompt: <code>sdlc-workflow</code>, <code>environment-regrowth</code>, <code>coding-standards</code>, <code>testing-standards</code>, <code>security-standards</code>, <code>deployment-checklist</code>. The layer that prevents a clever idea from one agent silently violating an existing rule.</div>
+      <div class="who"><span class="agent-tag">All agents</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">.claude/<br>commands/</div>
+      <div class="name">Command surface</div>
+      <div class="does">User-facing slash commands: <code>/orchestrate</code>, <code>/plan</code>, <code>/tdd</code>, <code>/verify</code>, <code>/quality-gate</code>, <code>/checkpoint</code>, <code>/learn</code>. The hooks a human (or another agent) uses to invoke the system. Multi-stage requests route through <code>/orchestrate</code>.</div>
+      <div class="who"><span class="agent-tag">Humans</span><span class="agent-tag">Agent loops</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">docs/<br>ENVIRONMENT_<br>PROFILE.md</div>
+      <div class="name">Environment regrowth</div>
+      <div class="does">The transplant handshake. Records repo identity, spec hierarchy, repo structure, real commands (typecheck, test, build, deploy), quality baselines, deployment model, required domain leads, and known guardrails. Replaces hard-coded assumptions with evidence read from the host repo.</div>
+      <div class="who"><span class="agent-tag">All agents</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">docs/<br>SYSTEM_STATE.md</div>
+      <div class="name">Live status of record</div>
+      <div class="does">The orchestrator's working memory: active phase, current entry point, deployment state, active workstreams, open blockers, gate status, spec sync status, deferred items. Updated after every gate, deploy, and major decision.</div>
+      <div class="who"><span class="agent-tag">SDLC Orchestrator</span><span class="agent-tag">Verify</span><span class="agent-tag">Quality Gate</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">docs/<br>BOOTSTRAP_<br>CHECKLIST.md</div>
+      <div class="name">Transplant runbook</div>
+      <div class="does">The exact steps to onboard the kit into a new repo: copy seeds, fill the environment profile, fill system state, replace generic command lines with real ones, prune unneeded leads, add product-specific leads, run the orchestrator on a real task to validate the workflow.</div>
+      <div class="who"><span class="agent-tag">First-time operator</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">knowledge/</div>
+      <div class="name">Durable patterns</div>
+      <div class="does">Reusable implementation patterns and rule sets the system has learned. Indexed by <code>knowledge/INDEX.md</code>; SDLC-specific rules live in <code>knowledge/sdlc/rules.md</code>. New entries land here only after a pattern has been observed more than once.</div>
+      <div class="who"><span class="agent-tag">Learn</span><span class="agent-tag">All agents (read)</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">decisions/</div>
+      <div class="name">Architecture decision records</div>
+      <div class="does">Lightweight ADR archive — the appeal court for design disputes. Every decision that constrains future work earns a record here so it cannot be silently revisited or contradicted.</div>
+      <div class="who"><span class="agent-tag">Architect</span><span class="agent-tag">Spec Guardian</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">quality/<br>criteria.md</div>
+      <div class="name">Promoted quality criteria</div>
+      <div class="does">Recurring failure patterns that have been promoted into hard gate criteria. The <code>Quality Gate</code> reads this file directly when issuing pass/fail; <code>Learn</code> may add to it only with explicit human approval.</div>
+      <div class="who"><span class="agent-tag">Quality Gate</span><span class="agent-tag">Quality Lead</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">.github/<br>memories/</div>
+      <div class="name">Episodic memory</div>
+      <div class="does">Incident notes and rough-session debriefs in episode-template form: trigger, visible symptom, direct cause, systemic cause, verification failure, what was fixed, what remains unverified. Volatile but auditable.</div>
+      <div class="who"><span class="agent-tag">Postmortem</span><span class="agent-tag">Process Engineer</span></div>
+    </div>
+
+    <div class="spec-row">
+      <div class="num">SOURCE_MAP.md<br>COMPONENT_<br>MANIFEST.md<br>ASSEMBLY_<br>REPORT.md<br>SWOT_<br>ANALYSIS.md</div>
+      <div class="name">Package documentation</div>
+      <div class="does">The provenance and integrity of the kit itself: where each file came from, what is included, how the package was assembled, and the strengths/weaknesses/opportunities/threats of using it. Read these before customising.</div>
+      <div class="who"><span class="agent-tag">Operators</span><span class="agent-tag">Auditors</span></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="cl">Design constraint</div>
+    <p>The kit deliberately ships <strong>lean</strong>. Generic verification, deployment, and domain coverage are starting points — they must be regrown against the target repo's real toolchain via the environment profile before they become authoritative. The transplant is the first task, not an afterthought.</p>
+  </div>
+</section>
+
+<!-- ============ FOUR LAYERS ============ -->
+<section class="block" id="layers">
+  <div class="kicker-wrap"><span class="kicker">§05 · Agent layers</span></div>
+  <h2>The four cooperating agent layers.</h2>
+  <p style="margin-top:18px;">Don't memorise 22 agents. Memorise <em>four layers</em>. Each agent fits cleanly into one of these four roles, and the layer tells you what it can and cannot do.</p>
+
+  <div class="layers">
+    <div class="layer-card l1">
+      <div class="num">LAYER 01</div>
+      <h3>Control plane</h3>
+      <p>Decides which agent acts next, in what order. Reads state and spec before routing. Default entry point when scope is unclear.</p>
+      <div class="roles">SDLC Orchestrator<br>Build Lead</div>
+    </div>
+    <div class="layer-card l2">
+      <div class="num">LAYER 02</div>
+      <h3>Spec creators</h3>
+      <p>Define the work <em>before</em> code. Map blast radius, draft plans, check spec compliance, design boundaries. The "thinking" tier.</p>
+      <div class="roles">Change Impact<br>Planner<br>Spec Guardian<br>Architect<br>Database Reviewer</div>
+    </div>
+    <div class="layer-card l3">
+      <div class="num">LAYER 03</div>
+      <h3>Stage operatives</h3>
+      <p>Do the stage work and produce evidence. Hard pass/fail boundaries. Each owns a single SDLC stage and stops at it.</p>
+      <div class="roles">TDD Guide · Code Reviewer · Security Reviewer<br>Verify · Quality Gate · Phase Assess · Regression Sentinel<br>Deployment · Learn · Postmortem · Process Engineer</div>
+    </div>
+    <div class="layer-card l4">
+      <div class="num">LAYER 04</div>
+      <h3>Domain leads</h3>
+      <p>Gather and approve evidence inside their domain. Not workflow owners — they prepare the packet that the formal stage agent will rule on.</p>
+      <div class="roles">Platform Lead<br>Security Lead<br>Quality Lead<br>Observability Lead</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="cl">Critical distinction</div>
+    <p><strong>Stage operatives issue verdicts. Domain leads gather evidence.</strong> They are not interchangeable. If <code>Security Lead</code> says "ship it" and <code>Quality Gate</code> says "fail," <code>Quality Gate</code> wins. The lead's job was to make sure the gate had what it needed.</p>
+  </div>
+</section>
+
+<!-- ============ AGENT CATALOG ============ -->
+<section class="block" id="catalog">
+  <div class="kicker-wrap"><span class="kicker">§06 · Agent catalog</span></div>
+  <h2>All 22 agents, by what they actually do.</h2>
+  <p style="margin-top:18px;">Click any card to expand the role. Use the filter chips to narrow by layer.</p>
+
+  <div class="filter-bar" id="filterBar">
+    <button class="chip active" data-cat="all">All <span class="ct">22</span></button>
+    <button class="chip" data-cat="control">Control plane <span class="ct">2</span></button>
+    <button class="chip" data-cat="spec">Spec creators <span class="ct">5</span></button>
+    <button class="chip" data-cat="stage">Stage operatives <span class="ct">8</span></button>
+    <button class="chip" data-cat="domain">Domain leads <span class="ct">4</span></button>
+    <button class="chip" data-cat="learn">Learning &amp; analysis <span class="ct">3</span></button>
+  </div>
+
+  <div class="agent-grid" id="agentGrid">
+
+    <!-- CONTROL PLANE -->
+    <details class="agent cat-control" data-cat="control">
+      <summary><div><div class="name">SDLC Orchestrator</div><div class="tag-row"><span class="tagx">Control plane · default entry</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>The control plane. Reads <code>SYSTEM_STATE.md</code>, the spec hierarchy, and the drift report; chooses the next agent; enforces stage order; routes durable lessons.</p>
+        <div class="when"><strong>Use when:</strong> work spans multiple stages, ownership is unclear, or you don't know where to start. <strong>Default routing:</strong> unclear blast radius → Change Impact; planning only → Planner; pre-code → Spec Guardian; implementation → TDD Guide.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-control" data-cat="control">
+      <summary><div><div class="name">Build Lead</div><div class="tag-row"><span class="tagx">Control plane · go/no-go</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Owns gate-readiness evidence and the go/no-go call. Coordinates across workstreams when several lanes need to ship together.</p>
+        <div class="when"><strong>Strict rule:</strong> never approves on narrative — always demands tests, state, and domain evidence. Routes multi-stage work back to the SDLC Orchestrator.</div>
+      </div>
+    </details>
+
+    <!-- SPEC CREATORS -->
+    <details class="agent cat-spec" data-cat="spec">
+      <summary><div><div class="name">Change Impact</div><div class="tag-row"><span class="tagx">Spec creator · blast radius</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Maps what a planned change touches before any code is written. Identifies primary targets, dependents, affected tests, schema impact, deployment impact, and required reviewers.</p>
+        <div class="when"><strong>Use when:</strong> scope is non-trivial. <strong>Does not:</strong> design implementation. Hands off to Planner with a risk map.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-spec" data-cat="spec">
+      <summary><div><div class="name">Planner</div><div class="tag-row"><span class="tagx">Spec creator · plan</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Implementation-planning specialist. Produces objective, spec references, Critical Control Points, deliverables, assumptions, risks, verification plan, and recommended first slice.</p>
+        <div class="when"><strong>Use when:</strong> the request is planning-only. <strong>Routes back to Orchestrator</strong> if work extends into implementation, deployment, or incident follow-through.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-spec" data-cat="spec">
+      <summary><div><div class="name">Spec Guardian</div><div class="tag-row"><span class="tagx">Spec creator · compliance</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>The fiercest gatekeeper. Extracts testable requirements from the spec, compares plan/implementation against them, blocks contradictions, warns on gaps. Recommends spec updates rather than approving violating code.</p>
+        <div class="when"><strong>Use:</strong> before implementation, during audits. The reason functional requirements survive contact with code.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-spec" data-cat="spec">
+      <summary><div><div class="name">Architect</div><div class="tag-row"><span class="tagx">Spec creator · design</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Reviews system design when a change crosses boundaries, stresses platform limits, or introduces new structure. Produces options, trade-offs, boundary impacts, platform-fit risks, recommendation with rationale.</p>
+        <div class="when"><strong>Use when:</strong> a new ADR might be needed or an existing one is being challenged.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-spec" data-cat="spec">
+      <summary><div><div class="name">Database Reviewer</div><div class="tag-row"><span class="tagx">Spec creator · data</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Reviews schema, migrations, query contracts, persistence boundaries, data integrity. Flags uncertain migration scope as blocking.</p>
+        <div class="when"><strong>Use when:</strong> changes touch any persisted schema, row-level security policies, or query patterns recorded in the environment profile.</div>
+      </div>
+    </details>
+
+    <!-- STAGE OPERATIVES -->
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">TDD Guide</div><div class="tag-row"><span class="tagx">Stage operative · implementation</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Enforces RED → GREEN → REFACTOR around the repo's real toolchain. Identifies critical contracts, writes failing tests first, implements minimally, refactors safely.</p>
+        <div class="when"><strong>Strict rule:</strong> uses commands defined in <code>ENVIRONMENT_PROFILE.md</code>; if missing, stops and requests profiling rather than guessing.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Code Reviewer</div><div class="tag-row"><span class="tagx">Stage operative · review</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Reviews for quality, maintainability, correctness risk. Reports findings as BLOCKING / HIGH / MEDIUM. Skips low-confidence noise.</p>
+        <div class="when"><strong>Use:</strong> after implementation, before security review.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Security Reviewer</div><div class="tag-row"><span class="tagx">Stage operative · review</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Reviews for security risk: secrets, auth, injection, unsafe input, sensitive logging, boundary isolation, deployment-time exposure. Blocks on serious issues.</p>
+        <div class="when"><strong>Use:</strong> on any change touching auth, secrets, external integrations, or tenant boundaries.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Verify</div><div class="tag-row"><span class="tagx">Stage operative · verification</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Stage 7 verification gate. Runs the repo's real build/typecheck, tests, and runtime/packaging/wiring checks. Diagnoses and reports — does not fix.</p>
+        <div class="when"><strong>Verdicts:</strong> PASS / FAIL / UNVERIFIED. Missing evidence = UNVERIFIED, treated as blocked.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Quality Gate</div><div class="tag-row"><span class="tagx">Stage operative · binary gate</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Stage 8 binary gate after Verify. Reads spec, review outputs, security findings, and <code>quality/criteria.md</code>. Pass or fail — no middle.</p>
+        <div class="when"><strong>Hard rule:</strong> missing evidence is fail; Verify must pass first; spec contradictions block advancement.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Phase Implementation Assess</div><div class="tag-row"><span class="tagx">Stage operative · phase gate</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>The phase-transition gatekeeper. Conservative by design. Allowed statuses: NOT STARTED / PARTIALLY IMPLEMENTED / IMPLEMENTED BUT NOT VERIFIED / VERIFIED BUT NOT TRANSITION READY / TRANSITION READY.</p>
+        <div class="when"><strong>Use:</strong> at every phase exit. Caps readiness conservatively when any hard gate fails.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Regression Sentinel</div><div class="tag-row"><span class="tagx">Stage operative · regression</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Protects the baseline after changes land. Checks build/typecheck regressions, test count or pass-rate regression, missing test updates, coverage regression, contract or golden-baseline drift.</p>
+        <div class="when"><strong>Reads:</strong> baselines from <code>ENVIRONMENT_PROFILE.md</code> and <code>SYSTEM_STATE.md</code>.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-stage" data-cat="stage">
+      <summary><div><div class="name">Deployment Agent</div><div class="tag-row"><span class="tagx">Stage operative · deploy</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Two modes: <code>readiness</code> (assess only) and <code>execute</code> (controlled rollout). Normalises environment and boundary, verifies config/auth/secrets/migrations/order, applies only safe reversible fixes when intent is explicit.</p>
+        <div class="when"><strong>Hard rule:</strong> never deploys beyond requested scope. Finishes with a hard verdict.</div>
+      </div>
+    </details>
+
+    <!-- DOMAIN LEADS -->
+    <details class="agent cat-domain" data-cat="domain">
+      <summary><div><div class="name">Platform Lead</div><div class="tag-row"><span class="tagx">Domain lead · platform fit</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Owns runtime constraints, deployment configs, environment parity, migrations and rollout ordering, queue/worker/service topology, infra blockers that could invalidate verify or deploy.</p>
+        <div class="when"><strong>Treats as blocking:</strong> config drift, ambiguous deployment boundaries.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-domain" data-cat="domain">
+      <summary><div><div class="name">Security Lead</div><div class="tag-row"><span class="tagx">Domain lead · security posture</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Owns auth, authorization, secret handling, data exposure risk, isolation/tenancy guarantees, rollout security posture. Prepares evidence for the Security Reviewer's verdict.</p>
+        <div class="when"><strong>Hard rule:</strong> missing proof for sensitive boundaries is blocking, even if the change "looks fine."</div>
+      </div>
+    </details>
+
+    <details class="agent cat-domain" data-cat="domain">
+      <summary><div><div class="name">Quality Lead</div><div class="tag-row"><span class="tagx">Domain lead · evidence quality</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Decides whether the evidence packet is good enough for a gate to trust. Owns acceptance criteria, test/contract coverage, baseline protection, soak/readiness evidence, packet completeness.</p>
+        <div class="when"><strong>Hard rule:</strong> weak evidence is a blocker even when the narrative sounds confident.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-domain" data-cat="domain">
+      <summary><div><div class="name">Observability Lead</div><div class="tag-row"><span class="tagx">Domain lead · runtime evidence</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Proves what happened and whether the system can observe future failures. Logging/trace coverage, metric/alert readiness, error-code discipline, runtime verification, soak-window proof.</p>
+        <div class="when"><strong>Hard rule:</strong> if a failure mode cannot be observed, the change is not ready.</div>
+      </div>
+    </details>
+
+    <!-- LEARNING -->
+    <details class="agent cat-learn" data-cat="learn">
+      <summary><div><div class="name">Learn</div><div class="tag-row"><span class="tagx">Learning · post-deploy</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Converts completed work into reusable learning. Reads system state, knowledge index, criteria, recent memories. Writes to <code>knowledge/</code>, <code>decisions/</code>, and (when explicitly approved) <code>quality/criteria.md</code>.</p>
+        <div class="when"><strong>Hard rule:</strong> does not invent rules from one-off noise — patterns must be confirmed before promotion.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-learn" data-cat="learn">
+      <summary><div><div class="name">Postmortem</div><div class="tag-row"><span class="tagx">Learning · incident</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Turns a failure or rough session into a durable artifact. Distinguishes trigger / visible symptom / direct cause / systemic cause / verification failure / what was fixed / what remains unverified.</p>
+        <div class="when"><strong>Use after:</strong> incidents, failed sessions, repeated blockers. Writes to <code>memories/</code>.</div>
+      </div>
+    </details>
+
+    <details class="agent cat-learn" data-cat="learn">
+      <summary><div><div class="name">Process Engineer</div><div class="tag-row"><span class="tagx">Learning · process mining</span></div></div><span class="arrow">+</span></summary>
+      <div class="body">
+        <p>Reasons from logs, traces, events, metrics, and workflow evidence rather than assumptions. Modes: baseline establishment, deviation detection, troubleshooting, improvement recommendations.</p>
+        <div class="when"><strong>Promotes:</strong> proven recurring patterns into memory, instructions, or agents.</div>
+      </div>
+    </details>
+
+  </div>
+</section>
+
+<!-- ============ PROMPTS ============ -->
+<section class="block" id="prompts">
+  <div class="kicker-wrap"><span class="kicker">§07 · Prompts</span></div>
+  <h2>Prompts: structured workflow entry points.</h2>
+  <p style="margin-top:18px;">Prompts are the standardised <em>recipes</em>. Where a command says "start the orchestrator," a prompt says "do this multi-step recipe with these inputs and these outputs." They live in <code>.github/prompts/</code> and exist to keep recurring workflows consistent across runs and across repos.</p>
+
+  <div class="two-col">
+    <div class="col-card">
+      <h4>Intake &amp; planning prompts</h4>
+      <ul>
+        <li><code>receive-feature-signal</code> — structured intake before spec sync; checks blockers, phase fit, compatibility</li>
+        <li><code>sync-external-spec</code> — drafts spec updates first, then runs Spec Guardian, then hands to plan-feature</li>
+        <li><code>plan-feature</code> — runs change-impact, planner, spec-guardian in sequence; produces plan</li>
+      </ul>
+    </div>
+    <div class="col-card">
+      <h4>Verify &amp; deploy prompts</h4>
+      <ul>
+        <li><code>verify-phase</code> — build/typecheck → tests → spec compliance → regression → phase assess → one verdict</li>
+        <li><code>prepare-for-deployment</code> — runs Deployment Agent in readiness mode; normalises env, scope, rollout, constraints</li>
+        <li><code>execute-deployment</code> — runs Deployment Agent in execute mode; readiness checks first, scoped, hard verdict</li>
+        <li><code>broadcast-state</code> — produces stakeholder-ready broadcast and refreshes <code>SYSTEM_STATE.md</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMMANDS ============ -->
+<section class="block" id="commands">
+  <div class="kicker-wrap"><span class="kicker">§08 · Commands</span></div>
+  <h2>Commands: the user-facing hooks.</h2>
+  <p style="margin-top:18px;">Commands live in <code>.claude/commands/</code> and are how a human (or another agent) invokes the system. Keep command intent narrow — multi-stage requests route through <code>/orchestrate</code> instead of overloading individual commands.</p>
+
+  <div class="agent-grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/orchestrate</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Default for multi-stage work, incidents, releases, unclear ownership. Reads state, picks entry point, sequences agents.</p>
+    </div>
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/plan</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Planning-only. Produces objectives, CCPs, assumptions, risks. Defers to /orchestrate if scope expands.</p>
+    </div>
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/tdd</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Enforces RED → GREEN → REFACTOR for risky or behaviour-changing work. Critical contracts first.</p>
+    </div>
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/verify</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Runs the real build/typecheck, tests, and routing/packaging checks via commands from ENVIRONMENT_PROFILE.md.</p>
+    </div>
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/quality-gate</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Binary pass/fail after Verify. Uses spec, review outputs, security findings, and quality/criteria.md.</p>
+    </div>
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/checkpoint</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Creates clean evidence-backed save points in long-running work.</p>
+    </div>
+    <div class="agent" style="cursor:default;">
+      <div class="name" style="font-family:var(--mono);color:var(--copper-bright);font-size:1rem;">/learn</div>
+      <p style="margin-top:8px;font-size:0.9rem;color:var(--bone-muted);">Extracts reusable patterns from completed work and incidents into memory, knowledge, decisions, quality.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INSTRUCTIONS ============ -->
+<section class="block" id="instructions">
+  <div class="kicker-wrap"><span class="kicker">§09 · Instructions</span></div>
+  <h2>Instructions: the standards layer.</h2>
+  <p style="margin-top:18px;">Instructions are the <em>house rules</em>. They sit in <code>.github/instructions/</code> and apply across agents and prompts. They are the layer that prevents a bright idea from one agent contradicting an existing rule someone already wrote down.</p>
+
+  <div class="rules">
+    <div class="rule">
+      <div class="num">i</div>
+      <div class="ct"><strong>sdlc-workflow</strong><span>Defines the canonical pipeline (External signal → spec sync → change impact → planning → spec guardian → TDD → review → security review → verify → quality gate → phase assess → regression → deploy → broadcast → learn) and the default-bias rule: when in doubt, start with the orchestrator.</span></div>
+    </div>
+    <div class="rule">
+      <div class="num">ii</div>
+      <div class="ct"><strong>environment-regrowth</strong><span>How transplanted assets regain repo-specific behaviour: read <code>ENVIRONMENT_PROFILE.md</code>, then <code>SYSTEM_STATE.md</code>, then root README, package manifests, CI files, infra config, and tests. Prefer evidence over inherited assumptions. The signature instruction of the kit — without it, the package stays generic.</span></div>
+    </div>
+    <div class="rule">
+      <div class="num">iii</div>
+      <div class="ct"><strong>coding-standards</strong><span>Keep files focused, prefer explicit types at boundaries, avoid mutation, handle errors explicitly, validate external input, structured logging, simple testable functions.</span></div>
+    </div>
+    <div class="rule">
+      <div class="num">iv</div>
+      <div class="ct"><strong>testing-standards</strong><span>Tests before or alongside risky implementation; preserve baseline; cover failure paths not just happy paths; use commands from <code>ENVIRONMENT_PROFILE.md</code>.</span></div>
+    </div>
+    <div class="rule">
+      <div class="num">v</div>
+      <div class="ct"><strong>security-standards</strong><span>No hardcoded secrets, validate untrusted input, review auth at boundaries, check injection risks for the live stack, isolation/tenancy/permission drift is blocking.</span></div>
+    </div>
+    <div class="rule">
+      <div class="num">vi</div>
+      <div class="ct"><strong>deployment-checklist</strong><span>Normalise scope first, real deploy commands known, secrets/auth clear, config parity verified, migrations scoped, verification matches service type, safe-fix policy.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PIPELINE ============ -->
+<section class="block" id="pipeline">
+  <div class="kicker-wrap"><span class="kicker">§10 · Pipeline</span></div>
+  <h2>The SDLC pipeline, in fifteen steps.</h2>
+  <p style="margin-top:18px;">A feature moves through these stages. Each cell shows the stage name and which agent owns the verdict for that stage. The order is canonical — declared in <code>.github/instructions/sdlc-workflow.instructions.md</code> — and any deviation must be justified in writing.</p>
+
+  <div class="pipeline">
+    <div class="pipeline-track">
+      <div class="stage-cell s-spec"><div class="n">01</div><div class="nm">External signal</div><div class="who">receive-feature-signal</div></div>
+      <div class="stage-cell s-spec"><div class="n">02</div><div class="nm">Spec sync</div><div class="who">sync-external-spec · Spec Guardian</div></div>
+      <div class="stage-cell s-spec"><div class="n">03</div><div class="nm">Change impact</div><div class="who">Change Impact</div></div>
+      <div class="stage-cell s-spec"><div class="n">04</div><div class="nm">Planning</div><div class="who">Planner</div></div>
+      <div class="stage-cell s-spec"><div class="n">05</div><div class="nm">Spec compliance</div><div class="who">Spec Guardian</div></div>
+      <div class="stage-cell s-impl"><div class="n">06</div><div class="nm">TDD impl.</div><div class="who">TDD Guide</div></div>
+      <div class="stage-cell s-impl"><div class="n">07</div><div class="nm">Code review</div><div class="who">Code Reviewer</div></div>
+      <div class="stage-cell s-impl"><div class="n">08</div><div class="nm">Security review</div><div class="who">Security Reviewer · Security Lead</div></div>
+      <div class="stage-cell s-verify"><div class="n">09</div><div class="nm">Verify</div><div class="who">Verify</div></div>
+      <div class="stage-cell s-verify"><div class="n">10</div><div class="nm">Quality gate</div><div class="who">Quality Gate · Quality Lead</div></div>
+      <div class="stage-cell s-verify"><div class="n">11</div><div class="nm">Phase assess</div><div class="who">Phase Implementation Assess</div></div>
+      <div class="stage-cell s-verify"><div class="n">12</div><div class="nm">Regression</div><div class="who">Regression Sentinel</div></div>
+      <div class="stage-cell s-deploy"><div class="n">13</div><div class="nm">Deploy</div><div class="who">Deployment Agent · Platform Lead</div></div>
+      <div class="stage-cell s-deploy"><div class="n">14</div><div class="nm">Broadcast</div><div class="who">broadcast-state</div></div>
+      <div class="stage-cell s-learn"><div class="n">15</div><div class="nm">Learn</div><div class="who">Learn · Postmortem · Process Engineer</div></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="cl">Stage discipline</div>
+    <p>Stages do not skip silently. Missing evidence at stage <em>n</em> blocks stage <em>n+1</em>. The orchestrator is responsible for honouring the order; domain leads are responsible for ensuring the evidence packet is real.</p>
+  </div>
+</section>
+
+<!-- ============ ORCHESTRATE FLOW ============ -->
+<section class="block" id="orchestrate">
+  <div class="kicker-wrap"><span class="kicker">§11 · /orchestrate</span></div>
+  <h2>What <code style="font-size:0.85em;">/orchestrate</code> actually does on every call.</h2>
+  <p style="margin-top:18px;">Eleven deterministic steps, defined in the orchestrator agent file and the <code>orchestrate</code> command. Same algorithm in every repo the kit lands in — only the inputs change.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 880 460" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#d97a2c"/></marker>
+      </defs>
+      <!-- 11 numbered steps in a flowing zigzag -->
+      <g font-family="Inter Tight" font-size="13" fill="#ece5d3">
+        <!-- step 1 -->
+        <rect x="20" y="30" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="30" y="48" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 01 · READ</text>
+        <text x="30" y="68" font-size="13">SYSTEM_STATE.md</text>
+        <!-- step 2 -->
+        <rect x="220" y="30" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="230" y="48" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 02 · READ</text>
+        <text x="230" y="68" font-size="13">ENVIRONMENT_PROFILE</text>
+        <!-- step 3 -->
+        <rect x="420" y="30" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="430" y="48" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 03 · READ</text>
+        <text x="430" y="68" font-size="13">Spec hierarchy</text>
+        <!-- step 4 -->
+        <rect x="620" y="30" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="630" y="48" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 04 · READ</text>
+        <text x="630" y="68" font-size="13">DRIFT_REPORT.md</text>
+
+        <!-- step 5 -->
+        <rect x="620" y="130" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="630" y="148" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 05 · READ</text>
+        <text x="630" y="168" font-size="13">Failing CI/test/eval</text>
+        <!-- step 6 -->
+        <rect x="420" y="130" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="430" y="148" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 06 · DETERMINE</text>
+        <text x="430" y="168" font-size="13">Phase &amp; gate status</text>
+        <!-- step 7 -->
+        <rect x="220" y="130" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="230" y="148" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 07 · SELECT</text>
+        <text x="230" y="168" font-size="13">Next task by priority</text>
+        <!-- step 8 -->
+        <rect x="20" y="130" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="30" y="148" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 08 · ROUTE</text>
+        <text x="30" y="168" font-size="13">To correct SDLC agent</text>
+
+        <!-- step 9 -->
+        <rect x="20" y="230" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="30" y="248" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 09 · BUILD</text>
+        <text x="30" y="268" font-size="13">Build packet</text>
+        <!-- step 10 -->
+        <rect x="220" y="230" width="180" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="230" y="248" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 10 · ENSURE</text>
+        <text x="230" y="268" font-size="13">Tests/evals/status in scope</text>
+        <!-- step 11 -->
+        <rect x="420" y="230" width="380" height="55" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="430" y="248" font-family="JetBrains Mono" font-size="10" fill="#d97a2c" letter-spacing="1.5">STEP 11 · UPDATE STATUS FILES (always)</text>
+        <text x="430" y="268" font-size="13">SYSTEM_STATE · DRIFT · DECISION_LOG · STATUS_REPORT</text>
+      </g>
+
+      <!-- Priority order panel -->
+      <rect x="20" y="320" width="780" height="120" fill="#08070500" stroke="#2a261e" rx="3"/>
+      <text x="30" y="340" font-family="JetBrains Mono" font-size="10" fill="#c4a85e" letter-spacing="2">SELECTION PRIORITY ORDER (STEP 07)</text>
+      <text x="30" y="362" font-family="Inter Tight" font-size="12" fill="#b8b0a0">1. Security-critical failure   ›   2. Broken build/deploy   ›   3. Failing contract test   ›   4. Spec/code drift</text>
+      <text x="30" y="382" font-family="Inter Tight" font-size="12" fill="#b8b0a0">5. Phase-gate blocker   ›   6. Incomplete active build packet   ›   7. Next walking-skeleton dependency</text>
+      <text x="30" y="402" font-family="Inter Tight" font-size="12" fill="#b8b0a0">8. Next milestone dependency   ›   9. Eval improvement   ›   10. Refactor or polish</text>
+      <text x="30" y="425" font-family="JetBrains Mono" font-size="10" fill="#7a7468" letter-spacing="1">If none apply → emit STATUS_NO_ACTIONABLE_TASK report explaining why.</text>
+
+      <!-- Arrows -->
+      <path d="M 200 57 L 220 57" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 400 57 L 420 57" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 600 57 L 620 57" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 710 85 L 710 130" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 620 157 L 600 157" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 420 157 L 400 157" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 220 157 L 200 157" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 110 185 L 110 230" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 200 257 L 220 257" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+      <path d="M 400 257 L 420 257" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr2)" fill="none"/>
+    </svg>
+    <div class="caption">Eleven deterministic steps. No "vibe-based" task selection.</div>
+  </div>
+</section>
+
+<!-- ============ LANES ============ -->
+<section class="block" id="lanes">
+  <div class="kicker-wrap"><span class="kicker">§12 · Lanes</span></div>
+  <h2>Lanes: strict ownership, parallel-safe.</h2>
+  <p style="margin-top:18px;">Spec SDLC partitions the host repository by ownership <em>lanes</em> — not folder convenience. Each lane has primary paths it owns, read-only paths it may consume, and forbidden paths. This is what makes <em>parallel</em> agent work tractable: two agents working in different lanes physically cannot collide.</p>
+  <p>The kit itself does not prescribe a fixed lane list — your repo declares its lanes during transplant, often in a partitioning document derived from this template. The example below shows a real ten-lane partition used in a TypeScript monorepo with a UI, a Worker BFF, an MCP layer, an orchestrator service, and a database schema. Use it as a model, not a mandate.</p>
+
+  <div class="tldr">
+    <div class="tag">The cardinal rule</div>
+    <p>One primary lane per task. Cross-lane edits are prohibited unless the packet is explicitly marked <code>integration_packet: true</code> and human-approved.</p>
+  </div>
+
+  <div class="lane-grid">
+    <div class="lane la-platform">
+      <div class="lid">LANE-PLATFORM</div>
+      <div class="lname">Platform Agent</div>
+      <div class="lown">Root workspace manifests, repo-wide scripts, shared config, bootstrap wiring.</div>
+      <div class="lpath"><span>package.json</span> · workspace files · base TS config · linter config · test runner config</div>
+    </div>
+    <div class="lane la-ui">
+      <div class="lid">LANE-UI</div>
+      <div class="lname">UI Agent</div>
+      <div class="lown">Front-end shell, transcript UX, typed renderers, source panel.</div>
+      <div class="lpath"><span>apps/&lt;web&gt;/**</span> · consumes shared contracts</div>
+    </div>
+    <div class="lane la-contracts">
+      <div class="lid">LANE-CONTRACTS</div>
+      <div class="lname">Contract Agent</div>
+      <div class="lown">Block schemas, stream/request schemas, shared TS types, contract fixtures.</div>
+      <div class="lpath"><span>packages/contracts/**</span> · owns the source of truth</div>
+    </div>
+    <div class="lane la-bff">
+      <div class="lid">LANE-BFF</div>
+      <div class="lname">BFF Agent</div>
+      <div class="lown">Edge or worker routes, auth bridge, quota checks, SSE relay.</div>
+      <div class="lpath"><span>workers/&lt;bff&gt;/**</span> · consumes contracts and integrations</div>
+    </div>
+    <div class="lane la-mcp">
+      <div class="lid">LANE-INTEGRATIONS</div>
+      <div class="lname">Integrations Agent</div>
+      <div class="lown">External tool wrappers, catalog, mock provider, fixtures.</div>
+      <div class="lpath"><span>packages/integrations/**</span> · consumes contracts</div>
+    </div>
+    <div class="lane la-orch">
+      <div class="lid">LANE-ORCH</div>
+      <div class="lname">Orchestrator Agent</div>
+      <div class="lown">Routing, retrieval, answer generation, safety pass, promotion-path orchestrator code.</div>
+      <div class="lpath"><span>services/&lt;orchestrator&gt;/**</span> · consumes contracts and integrations</div>
+    </div>
+    <div class="lane la-data">
+      <div class="lid">LANE-DATA</div>
+      <div class="lname">Data/Auth Agent</div>
+      <div class="lown">Schema, migrations, seeds, row-level security policies.</div>
+      <div class="lpath"><span>db/migrations/**</span> · seed/**</div>
+    </div>
+    <div class="lane la-eval">
+      <div class="lid">LANE-EVAL</div>
+      <div class="lname">Eval Agent</div>
+      <div class="lown">Golden demos, eval runner, adversarial fixtures.</div>
+      <div class="lpath"><span>examples/**</span> · apps/eval-runner/**</div>
+    </div>
+    <div class="lane la-verify">
+      <div class="lid">LANE-VERIFY</div>
+      <div class="lname">Verify Agent</div>
+      <div class="lown">Contract tests, CI, architecture consistency checks.</div>
+      <div class="lpath"><span>tests/**</span> · ci/** · all contracts read-only</div>
+    </div>
+    <div class="lane la-spec">
+      <div class="lid">LANE-SPEC</div>
+      <div class="lname">Spec Agent</div>
+      <div class="lown">Specs, build packets, status docs, ADRs, quality rules.</div>
+      <div class="lpath"><span>docs/**</span> · decisions/** · knowledge/** · quality/**</div>
+    </div>
+  </div>
+
+  <div class="spacer-lg"></div>
+
+  <h3 style="font-family:var(--display);font-weight:500;">Build packet header</h3>
+  <p style="margin-top:10px;">Every implementation packet must declare the same fields. If any are unclear, the agent stops and emits a packet variance note instead of editing code.</p>
+
+  <pre style="font-family:var(--mono); font-size: 0.82rem; background: var(--bg-deep); padding: 18px 20px; border-radius: 3px; border: 1px solid var(--border); margin: 14px 0; overflow-x: auto; color: var(--bone); line-height: 1.6;">Primary lane:
+Allowed edit paths:
+Forbidden edit paths:
+Contracts consumed:
+Contracts changed:
+Coordination files:
+Phase:
+User-visible outcome:
+Files allowed to change:
+Files not allowed to change:
+Dependency budget:
+Tests to write first:
+Stop conditions:</pre>
+
+  <h3 style="font-family:var(--display);font-weight:500;margin-top:30px;">Contract-flow ordering</h3>
+  <p style="margin-top:10px;">Cross-lane work moves in a specific sequence. Skip a step and the parallel-safety guarantee breaks.</p>
+
+  <div class="diagram" style="padding:30px 24px;">
+    <svg viewBox="0 0 880 100" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#d97a2c"/></marker></defs>
+      <g font-family="Inter Tight" font-size="13">
+        <rect x="10" y="30" width="150" height="50" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="85" y="55" text-anchor="middle" fill="#ece5d3">contract</text>
+        <text x="85" y="72" text-anchor="middle" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1">PACKET 1</text>
+
+        <rect x="180" y="30" width="150" height="50" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="255" y="55" text-anchor="middle" fill="#ece5d3">producer</text>
+        <text x="255" y="72" text-anchor="middle" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1">PACKET 2</text>
+
+        <rect x="350" y="30" width="150" height="50" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="425" y="55" text-anchor="middle" fill="#ece5d3">consumer</text>
+        <text x="425" y="72" text-anchor="middle" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1">PACKET 3</text>
+
+        <rect x="520" y="30" width="150" height="50" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="595" y="55" text-anchor="middle" fill="#ece5d3">integration</text>
+        <text x="595" y="72" text-anchor="middle" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1">PACKET 4</text>
+
+        <rect x="690" y="30" width="150" height="50" fill="#15130f" stroke="#d97a2c" rx="3"/>
+        <text x="765" y="55" text-anchor="middle" fill="#ece5d3">verify</text>
+        <text x="765" y="72" text-anchor="middle" fill="#7a7468" font-family="JetBrains Mono" font-size="9" letter-spacing="1">PACKET 5</text>
+
+        <path d="M 160 55 L 180 55" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr3)" fill="none"/>
+        <path d="M 330 55 L 350 55" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr3)" fill="none"/>
+        <path d="M 500 55 L 520 55" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr3)" fill="none"/>
+        <path d="M 670 55 L 690 55" stroke="#d97a2c" stroke-width="1.5" marker-end="url(#arr3)" fill="none"/>
+      </g>
+    </svg>
+    <div class="caption">Adding a new content block: contracts defines schema → producer emits it → UI renders it → integration wires end-to-end → verify checks the round trip.</div>
+  </div>
+
+  <div class="callout">
+    <div class="cl">Dependency budget</div>
+    <p>A packet may add at most <strong>one</strong> new runtime dependency. The packet must record purpose, exact pinned version, alternatives considered, security impact, affected deployable, and a removal plan.</p>
+  </div>
+</section>
+
+<!-- ============ WORKED EXAMPLE ============ -->
+<section class="block" id="worked">
+  <div class="kicker-wrap"><span class="kicker">§13 · Worked example</span></div>
+  <h2>How a brand-new repo onboards spec SDLC and ships its first feature.</h2>
+  <p style="margin-top:18px;">Step through the full transplant + first-feature flow and watch the system actually move. Click each step.</p>
+
+  <div class="we-tabs" id="weTabs">
+    <button class="we-tab active" data-step="1">01 Transplant</button>
+    <button class="we-tab" data-step="2">02 Profile</button>
+    <button class="we-tab" data-step="3">03 Intake</button>
+    <button class="we-tab" data-step="4">04 Impact</button>
+    <button class="we-tab" data-step="5">05 Plan</button>
+    <button class="we-tab" data-step="6">06 Compliance</button>
+    <button class="we-tab" data-step="7">07 TDD</button>
+    <button class="we-tab" data-step="8">08 Verify</button>
+    <button class="we-tab" data-step="9">09 Gate</button>
+    <button class="we-tab" data-step="10">10 Deploy</button>
+    <button class="we-tab" data-step="11">11 Learn</button>
+  </div>
+
+  <div class="we-step active" data-step="1">
+    <div class="step-no">Step 01 · Transplant</div>
+    <div class="step-h">"Drop the kit into the host repo."</div>
+    <div class="step-meta">
+      <span><span class="ml">Action</span><strong>copy seed tree</strong></span>
+      <span><span class="ml">Source</span>Lean Spec SDLC components</span>
+      <span><span class="ml">Output</span>seeded repo</span>
+    </div>
+    <p>Following <code>BOOTSTRAP_CHECKLIST.md</code>, the operator copies the kit's <code>.github/</code>, <code>.claude/</code>, <code>docs/</code>, <code>knowledge/</code>, <code>decisions/</code>, and <code>quality/</code> seeds into the target repo. Inner directories are merged (or renamed) into the repo's existing equivalents.</p>
+    <h5>What just landed in the repo</h5>
+    <ul>
+      <li>22 agent definitions in <code>.github/agents/</code></li>
+      <li>7 prompts in <code>.github/prompts/</code></li>
+      <li>6 instructions in <code>.github/instructions/</code></li>
+      <li>7 commands in <code>.claude/commands/</code></li>
+      <li>State and environment templates in <code>docs/</code></li>
+      <li>Knowledge index, decision log header, quality criteria placeholder, memory episode template</li>
+    </ul>
+    <p>Nothing in the agents references the old source repo — the package was rewritten to be portable. But it is still <em>generic</em>. Step 2 is what makes it specific again.</p>
+  </div>
+
+  <div class="we-step" data-step="2">
+    <div class="step-no">Step 02 · Profile the environment</div>
+    <div class="step-h">Regrow repo-specific behaviour.</div>
+    <div class="step-meta">
+      <span><span class="ml">File</span><strong>docs/ENVIRONMENT_PROFILE.md</strong></span>
+      <span><span class="ml">Driver</span>environment-regrowth instruction</span>
+    </div>
+    <p>Per the <code>environment-regrowth</code> instruction, the operator (or the orchestrator on first run) reads what is already in the host repo and writes the profile. The profile replaces hard-coded assumptions with evidence.</p>
+    <pre><span class="com"># docs/ENVIRONMENT_PROFILE.md (excerpt)</span>
+Product or service:    <span class="key">acme-app</span>
+Runtime or platform:   <span class="key">Node 20 · Cloudflare Workers · Postgres</span>
+Main languages:        <span class="key">TypeScript</span>
+Spec hierarchy:        <span class="key">docs/PRD.md, docs/architecture.md, docs/phase-plan.md</span>
+
+<span class="com"># Commands</span>
+Typecheck:    <span class="key">pnpm typecheck</span>
+Tests:        <span class="key">pnpm test</span>
+Lint:         <span class="key">pnpm lint</span>
+Build:        <span class="key">pnpm build</span>
+Deploy stg:   <span class="key">pnpm deploy:staging</span>
+Deploy prod:  <span class="key">pnpm deploy:prod</span>
+
+<span class="com"># Domain leads needed</span>
+Platform · Security · Quality · Observability · Data</pre>
+    <p>The matching <code>SYSTEM_STATE.md</code> is filled in too: active phase, open blockers (none yet), gate status (unknown / not run), spec sync status. From this point forward, every agent in the kit reads from these two files instead of guessing.</p>
+  </div>
+
+  <div class="we-step" data-step="3">
+    <div class="step-no">Step 03 · Intake</div>
+    <div class="step-h">"Build feature X."</div>
+    <div class="step-meta">
+      <span><span class="ml">Command</span><strong>/orchestrate</strong></span>
+      <span><span class="ml">Reads</span>SYSTEM_STATE · spec hierarchy</span>
+      <span><span class="ml">Output</span>routing decision</span>
+    </div>
+    <p>The first real request arrives. The operator runs <code>/orchestrate "build feature X — its spec is in docs/PRD.md §4"</code>. SDLC Orchestrator reads <code>SYSTEM_STATE.md</code>, <code>ENVIRONMENT_PROFILE.md</code>, and the spec hierarchy.</p>
+    <h5>Selection result</h5>
+    <ul>
+      <li>Active phase: <code>Phase 0 · walking skeleton</code></li>
+      <li>Priority class: 7 (next walking-skeleton dependency)</li>
+      <li>Spec already references the feature → no <code>sync-external-spec</code> needed</li>
+      <li>Route directly to: <code>Change Impact</code>, then <code>Planner</code></li>
+    </ul>
+    <h5>State written</h5>
+    <pre><span class="com"># SYSTEM_STATE.md</span>
+Active phase: <span class="key">Phase 0 · walking skeleton</span>
+Current entry point: /orchestrate
+Active workstream: <span class="key">FEAT-001 · feature X</span>
+Owner: SDLC Orchestrator → Change Impact</pre>
+  </div>
+
+  <div class="we-step" data-step="4">
+    <div class="step-no">Step 04 · Change impact</div>
+    <div class="step-h">Map the blast radius before any code.</div>
+    <div class="step-meta">
+      <span><span class="ml">Agent</span><strong>Change Impact</strong></span>
+      <span><span class="ml">Output</span>impact map</span>
+    </div>
+    <p>Change Impact identifies which lanes are touched, what contracts move, what tests will need updating, and what coordination files might be in play. It deliberately does not design implementation.</p>
+    <h5>Impact map</h5>
+    <ul>
+      <li>Lanes touched: <code>LANE-CONTRACTS</code> (one new schema), <code>LANE-BFF</code> (one new endpoint), <code>LANE-UI</code> (renderer), <code>LANE-EVAL</code> (one acceptance scenario), <code>LANE-SPEC</code> (status update)</li>
+      <li>Contracts changed: <strong>one</strong> additive schema</li>
+      <li>Coordination files: <code>package.json</code> (new internal dep on contracts package only)</li>
+      <li>Risk level: <strong>medium</strong> — many lanes, no auth or schema changes</li>
+      <li>Recommendation: decompose into <strong>five lane-owned packets</strong>, contract-first</li>
+    </ul>
+  </div>
+
+  <div class="we-step" data-step="5">
+    <div class="step-no">Step 05 · Plan</div>
+    <div class="step-h">Decompose into lane-owned build packets.</div>
+    <div class="step-meta">
+      <span><span class="ml">Agent</span><strong>Planner</strong></span>
+      <span><span class="ml">Output</span>plan + packet list</span>
+    </div>
+    <p>The Planner produces a packet sequence. Each packet has a primary lane and explicit allowed/forbidden paths.</p>
+    <pre><span class="com"># Packet sequence for FEAT-001</span>
+PKT-01 Contract for new block       <span class="key">LANE-CONTRACTS</span>
+PKT-02 BFF endpoint emits block     <span class="key">LANE-BFF</span>         <span class="com"># consumes PKT-01</span>
+PKT-03 UI renderer for new block    <span class="key">LANE-UI</span>          <span class="com"># consumes PKT-01</span>
+PKT-04 First Gherkin acceptance     <span class="key">LANE-EVAL</span>
+PKT-05 Status &amp; gate evidence       <span class="key">LANE-SPEC</span></pre>
+    <p>PKT-02 and PKT-03 may run in parallel <em>after</em> PKT-01 lands. Contract-flow ordering is honoured: contract → producer → consumer → integration → verify.</p>
+  </div>
+
+  <div class="we-step" data-step="6">
+    <div class="step-no">Step 06 · Spec compliance</div>
+    <div class="step-h">Confirm the plan does not contradict the spec.</div>
+    <div class="step-meta">
+      <span><span class="ml">Agent</span><strong>Spec Guardian</strong></span>
+      <span><span class="ml">Verdict</span>compliant — proceed</span>
+    </div>
+    <p>Spec Guardian compares the plan against the operating principles, scope statement, packet schema, and lane partition rules.</p>
+    <h5>Checks performed</h5>
+    <ul>
+      <li>Every functional requirement maps to a contract test or eval ✓</li>
+      <li>Every build packet emits status evidence ✓ (PKT-05 owns this)</li>
+      <li>Each packet declares one primary lane ✓</li>
+      <li>Each packet declares allowed paths, forbidden paths, contracts, coordination files, stop conditions ✓</li>
+      <li>No packet modifies auth + integrations + UI together ✓</li>
+    </ul>
+    <h5>Verdict</h5>
+    <p style="color:var(--moss);">Compliant. Proceed to TDD.</p>
+  </div>
+
+  <div class="we-step" data-step="7">
+    <div class="step-no">Step 07 · TDD implementation</div>
+    <div class="step-h">RED → GREEN → REFACTOR for each packet.</div>
+    <div class="step-meta">
+      <span><span class="ml">Command</span><strong>/tdd</strong></span>
+      <span><span class="ml">Agent</span>TDD Guide</span>
+      <span><span class="ml">Output</span>working code + tests</span>
+    </div>
+    <p>For PKT-01 (contract): TDD Guide writes a failing schema validation test, then makes it pass with the minimal additive schema.</p>
+    <p>For PKT-03 (UI renderer): writes failing renderer tests against the new contract first, then implements the component to satisfy them.</p>
+    <p>For PKT-02 (BFF endpoint): writes a failing stream test asserting the new block sequence, then implements the endpoint.</p>
+    <h5>Each packet ends with the required evidence packet</h5>
+    <pre>Changed paths:        apps/web/src/blocks/Foo.tsx, ...
+Primary lane:         LANE-UI
+Contracts consumed:   packages/contracts (new schema)
+Tests added:          renderer.spec.tsx, stream.spec.ts
+Tests run:            pnpm test → 14 passing
+Coordination files:   none
+Known risks:          none for Phase 0
+Next packet:          PKT-04 first Gherkin acceptance</pre>
+  </div>
+
+  <div class="we-step" data-step="8">
+    <div class="step-no">Step 08 · Verify</div>
+    <div class="step-h">Hard build, test, and routing checks.</div>
+    <div class="step-meta">
+      <span><span class="ml">Command</span><strong>/verify</strong></span>
+      <span><span class="ml">Agent</span>Verify</span>
+      <span><span class="ml">Verdict</span>PASS / FAIL / UNVERIFIED</span>
+    </div>
+    <p>Verify runs the actual repo commands from <code>ENVIRONMENT_PROFILE.md</code>.</p>
+    <pre><span class="com"># Hard gates</span>
+$ pnpm typecheck                    <span class="key">PASS</span>
+$ pnpm test                          <span class="key">PASS · 14/14</span>
+$ pnpm test:contract                 <span class="key">PASS · 4/4 contracts green</span>
+$ pnpm dev:smoke                     <span class="key">PASS · stream terminates with end block</span>
+
+Verdict: <span class="key">PASS</span></pre>
+    <p>Verify diagnoses, but does not fix. If anything had failed, it would emit UNVERIFIED and route back to TDD Guide via the Orchestrator.</p>
+  </div>
+
+  <div class="we-step" data-step="9">
+    <div class="step-no">Step 09 · Quality gate &amp; phase assess</div>
+    <div class="step-h">Binary gate. Phase transition decision.</div>
+    <div class="step-meta">
+      <span><span class="ml">Command</span><strong>/quality-gate</strong></span>
+      <span><span class="ml">Then</span>Phase Implementation Assess</span>
+    </div>
+    <p>Quality Gate reads Verify output, security review, code review, and <code>quality/criteria.md</code>. Pass means: every Phase 0 exit-gate item green, no P0 drift, no blocking findings.</p>
+    <h5>Phase Implementation Assess</h5>
+    <ul>
+      <li>NOT STARTED · PARTIALLY IMPLEMENTED · IMPLEMENTED BUT NOT VERIFIED</li>
+      <li>VERIFIED BUT NOT TRANSITION READY · <strong style="color:var(--copper-bright);">TRANSITION READY ✓</strong></li>
+    </ul>
+    <p>Phase 0 → Phase 1 transition approved. <code>SYSTEM_STATE.md</code> is updated.</p>
+  </div>
+
+  <div class="we-step" data-step="10">
+    <div class="step-no">Step 10 · Deploy</div>
+    <div class="step-h">Dev environment deployment.</div>
+    <div class="step-meta">
+      <span><span class="ml">Prompt</span><strong>execute-deployment</strong></span>
+      <span><span class="ml">Agent</span>Deployment Agent (execute mode)</span>
+    </div>
+    <p>For Phase 0, dev only — staging and prod gates aren't open yet. Deployment Agent runs readiness checks first, then publishes the front-end and the BFF using the deploy commands declared in the environment profile.</p>
+    <h5>Dev gate checklist (subset)</h5>
+    <ul>
+      <li>Unit tests pass · contract tests pass · smoke evals pass</li>
+      <li>No P0 drift in <code>DRIFT_REPORT.md</code></li>
+      <li>Status files current</li>
+      <li>Secrets scan clean (no privileged credentials in browser bundle)</li>
+    </ul>
+    <h5>Acceptance check</h5>
+    <p>The Gherkin scenario from PKT-04 runs end-to-end against the dev URL. <strong>PASS.</strong></p>
+  </div>
+
+  <div class="we-step" data-step="11">
+    <div class="step-no">Step 11 · Learn</div>
+    <div class="step-h">Capture what this taught us.</div>
+    <div class="step-meta">
+      <span><span class="ml">Command</span><strong>/learn</strong></span>
+      <span><span class="ml">Agent</span>Learn</span>
+    </div>
+    <p>Walking-skeleton complete. Learn agent reviews the run for durable lessons. Most one-off issues stay one-off; only repeatable patterns get promoted.</p>
+    <h5>Possible promotions</h5>
+    <ul>
+      <li>Worker SSE timeout default needed retuning → write to <code>knowledge/sdlc/rules.md</code></li>
+      <li>Decision: contract-first ordering held even under time pressure → ADR in <code>decisions/</code></li>
+      <li>If a verify run fails twice for the same reason → quality criterion in <code>quality/criteria.md</code></li>
+    </ul>
+    <h5>Final state update</h5>
+    <pre>Active phase: <span class="key">Phase 1</span>
+Last completed: FEAT-001 walking skeleton
+Next recommended action: <span class="key">Phase 1 P0 — first non-skeleton feature</span>
+RELEASE_READINESS: dev green · staging not yet</pre>
+    <p>The orchestrator on the next run will read this state, see Phase 1, find the next packet — and the loop begins again. The kit has officially regrown into this repo.</p>
+  </div>
+</section>
+
+<!-- ============ STATE & MEMORY ============ -->
+<section class="block" id="state">
+  <div class="kicker-wrap"><span class="kicker">§14 · State &amp; memory</span></div>
+  <h2>The state files are the system's working memory.</h2>
+  <p style="margin-top:18px;">A handful of version-controlled markdown files in <code>docs/</code> are the live truth. Without them, the orchestrator has nowhere to read from on its next run. The kit ships templates; the host repo fills them.</p>
+
+  <div class="spec-anatomy">
+    <div class="spec-row head"><div>File</div><div>Purpose</div><div>Update rule</div><div>Cadence</div></div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">SYSTEM_STATE.md</code></div>
+      <div class="does">Current truth of repo, phase, health, blockers, gate status, spec sync, deployment status, deferred items</div>
+      <div class="who">Every <code>/orchestrate</code>, every gate, every deploy</div>
+      <div class="who">live</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">ENVIRONMENT_PROFILE.md</code></div>
+      <div class="does">Repo identity, spec hierarchy, real commands, quality baselines, deployment model, required leads, known guardrails</div>
+      <div class="who">On transplant; on toolchain change</div>
+      <div class="who">on-change</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">BOOTSTRAP_CHECKLIST.md</code></div>
+      <div class="does">The transplant runbook — copy seeds, fill profile, fill state, replace generic commands, prune and add leads, validate</div>
+      <div class="who">First-time setup only</div>
+      <div class="who">once</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">STATUS_REPORT.md</code></div>
+      <div class="does">Human-readable progress narrative, refreshed by the broadcast prompt</div>
+      <div class="who">Every completed build packet</div>
+      <div class="who">per-packet</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">DECISION_LOG.md</code></div>
+      <div class="does">Lightweight running decision record; ADR-worthy items graduate into <code>decisions/</code></div>
+      <div class="who">Every ADR or tactical decision</div>
+      <div class="who">on-decision</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">RISK_REGISTER.md</code></div>
+      <div class="does">Active product, technical, security, delivery risks</div>
+      <div class="who">Every phase gate and new blocker</div>
+      <div class="who">on-risk</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">DRIFT_REPORT.md</code></div>
+      <div class="does">Spec/code/test/doc drift findings</div>
+      <div class="who">Every Verify and Quality Gate</div>
+      <div class="who">per-gate</div>
+    </div>
+    <div class="spec-row" style="grid-template-columns: 1.5fr 2.5fr 2fr 1fr;">
+      <div class="num"><code style="color:var(--copper-bright);background:transparent;border:0;padding:0;">RELEASE_READINESS.md</code></div>
+      <div class="does">Gate evidence and release checklist</div>
+      <div class="who">Every phase gate</div>
+      <div class="who">per-phase</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="cl">Drift control</div>
+    <p>Documentation drift is a <em>defect</em> in this system, not an inconvenience. The drift detector checks that every functional requirement maps to a contract test or eval, every block type has schema + renderer + tests, every status file has been updated post-merge, every TODO links to a ticket. <strong>P0 drift blocks release.</strong></p>
+  </div>
+</section>
+
+<!-- ============ SELF-IMPROVEMENT ============ -->
+<section class="block" id="learn">
+  <div class="kicker-wrap"><span class="kicker">§15 · Self-improvement</span></div>
+  <h2>Controlled self-improvement, not autonomous self-mutation.</h2>
+  <p style="margin-top:18px;">The system gets better over time — but never by editing itself in production. Every lesson takes a deliberate path: trace → Learn agent → candidate update → human-approved PR → regression check → merge.</p>
+
+  <div class="flow">
+    <div class="flow-node"><div class="nlbl">step 1</div><div class="nval">Trace · failure · feedback</div></div>
+    <div class="flow-node"><div class="nlbl">step 2</div><div class="nval">Learn agent summary</div></div>
+    <div class="flow-node"><div class="nlbl">step 3</div><div class="nval">Candidate lesson</div></div>
+    <div class="flow-node"><div class="nlbl">step 4</div><div class="nval">Candidate eval / knowledge update</div></div>
+    <div class="flow-node"><div class="nlbl">step 5</div><div class="nval">Human-approved PR</div></div>
+    <div class="flow-node"><div class="nlbl">step 6</div><div class="nval">Regression / smoke eval</div></div>
+    <div class="flow-node"><div class="nlbl">step 7</div><div class="nval">Merge → status updated</div></div>
+  </div>
+
+  <div class="spacer-lg"></div>
+  <h3 style="font-family:var(--display);font-weight:500;">Where lessons land</h3>
+  <p style="margin-top:10px;">A confirmed lesson goes to exactly one durable home — chosen for the smallest-file-that-truly-owns-it.</p>
+  <div class="two-col">
+    <div class="col-card">
+      <h4>Volatile / specific</h4>
+      <ul>
+        <li><code>memories/</code> — incident lessons, what failed, what was fixed, what's still unverified</li>
+        <li><code>docs/RISK_REGISTER.md</code> — active risks that need watching</li>
+        <li><code>examples/</code> — new Gherkin acceptance tests</li>
+        <li><code>apps/eval-runner/</code> — new eval cases</li>
+      </ul>
+    </div>
+    <div class="col-card">
+      <h4>Durable / universal</h4>
+      <ul>
+        <li><code>knowledge/</code> — reusable implementation patterns</li>
+        <li><code>decisions/</code> — architecture decisions (ADRs)</li>
+        <li><code>quality/criteria.md</code> — recurring failure patterns promoted to gates</li>
+        <li>The spec itself — when a requirement actually changes</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="cl">Discipline</div>
+    <p>Don't promote one-off mistakes into global workflow law. A lesson is durable when the evidence shows the same pattern <em>twice</em>. Otherwise it stays in the run report.</p>
+  </div>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section class="block" id="glossary">
+  <div class="kicker-wrap"><span class="kicker">§16 · Quick reference</span></div>
+  <h2>Glossary &amp; cheat sheet.</h2>
+
+  <div class="glossary">
+    <div class="gloss-item"><dt>Spec SDLC</dt><dd>The portable, lean spec-driven delivery kit described in this document. Designed to be transplanted into any repo and regrow specifics.</dd></div>
+    <div class="gloss-item"><dt>SDLC Orchestrator</dt><dd>The control-plane agent. Default entry for any multi-stage work.</dd></div>
+    <div class="gloss-item"><dt>Build packet</dt><dd>The structured task contract. Declares lane, paths, contracts, tests, stop conditions.</dd></div>
+    <div class="gloss-item"><dt>Lane</dt><dd>A primary ownership zone in the repo. One primary lane per task.</dd></div>
+    <div class="gloss-item"><dt>Integration packet</dt><dd>Cross-lane packet, requires explicit human approval. Rare.</dd></div>
+    <div class="gloss-item"><dt>Stop condition</dt><dd>A trigger to stop and emit a variance note instead of editing code.</dd></div>
+    <div class="gloss-item"><dt>Packet variance</dt><dd>A note saying "this task can't proceed as scoped, here's why" — not a failure.</dd></div>
+    <div class="gloss-item"><dt>Functional requirement</dt><dd>A testable requirement extracted from the spec. Each must map to a contract test or eval.</dd></div>
+    <div class="gloss-item"><dt>Contract test</dt><dd>A test that pins a shared boundary (schema, type, protocol) so producers and consumers cannot drift.</dd></div>
+    <div class="gloss-item"><dt>Eval</dt><dd>End-to-end behavioural test for the agent path or feature scenario.</dd></div>
+    <div class="gloss-item"><dt>Walking skeleton</dt><dd>Minimal end-to-end deployable that proves the runtime path before features.</dd></div>
+    <div class="gloss-item"><dt>Environment regrowth</dt><dd>The kit's signature instruction: read the host repo and write <code>ENVIRONMENT_PROFILE.md</code> instead of guessing.</dd></div>
+    <div class="gloss-item"><dt>P0 drift</dt><dd>Spec/code/test/doc mismatch severe enough to block release.</dd></div>
+    <div class="gloss-item"><dt>Domain lead</dt><dd>Evidence preparer, not workflow owner. Makes packets the formal gate can rule on.</dd></div>
+    <div class="gloss-item"><dt>Stage operative</dt><dd>The agent that issues a binary verdict for a single SDLC stage.</dd></div>
+    <div class="gloss-item"><dt>Spec creator</dt><dd>Pre-implementation agents (Change Impact, Planner, Spec Guardian, Architect, DB Reviewer).</dd></div>
+    <div class="gloss-item"><dt>ADR</dt><dd>Architecture Decision Record. Constraints that bind future work. Lives in <code>decisions/</code>.</dd></div>
+    <div class="gloss-item"><dt>Coordination file</dt><dd>A file multiple lanes might touch (manifests, lockfiles, base configs). Always declared in the packet.</dd></div>
+    <div class="gloss-item"><dt>Evidence packet</dt><dd>Required closing block of every implementation response — what changed, what was tested, next packet.</dd></div>
+    <div class="gloss-item"><dt>Transplant</dt><dd>The act of dropping the kit into a new repo and running the bootstrap checklist to regrow specificity.</dd></div>
+  </div>
+
+  <div class="spacer-lg"></div>
+  <h3 style="font-family:var(--display);font-weight:500;">Mental model in one paragraph</h3>
+  <div class="hero-quote" style="margin-top:14px;">
+    A typed spec defines the truth. A control-plane orchestrator reads the spec and the live state file, decides which narrow agent acts next, and routes the work through stages. Each stage agent issues a hard verdict; domain leads prepare the evidence those verdicts depend on. Lanes keep parallel work parallel. State files keep yesterday's truth available. A learning loop turns recurring lessons into durable rules — but never silently, never without a human-approved PR. The whole kit is portable: drop it in, profile the environment, and the same discipline regrows in the new repo.
+  </div>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="ft-grid">
+    <div>
+      <div class="ft-mark">spec<span>·</span>SDLC</div>
+      <p style="margin-top:14px;">Agent system explainer for engineering teams. Use it as onboarding material, a hand-out for new contributors, or a reference when someone asks "why did we do it like this?"</p>
+    </div>
+    <div>
+      <p>Spec SDLC is a portable, lean transplant of a mature spec-first delivery kit. Its components live across <code>.github/agents/</code>, <code>.github/prompts/</code>, <code>.github/instructions/</code>, <code>.claude/commands/</code>, <code>docs/</code>, <code>knowledge/</code>, <code>decisions/</code>, <code>quality/</code>, and <code>memories/</code>. Read those directories alongside this document — and read <code>SOURCE_MAP.md</code>, <code>COMPONENT_MANIFEST.md</code>, <code>ASSEMBLY_REPORT.md</code>, and <code>SWOT_ANALYSIS.md</code> in the package root before customising — and the moving parts will line up with the named roles you saw here.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Filter chips
+const filterBar = document.getElementById('filterBar');
+const grid = document.getElementById('agentGrid');
+filterBar.addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  filterBar.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  const cat = chip.dataset.cat;
+  grid.querySelectorAll('.agent').forEach(a => {
+    if (cat === 'all' || a.dataset.cat === cat) a.classList.remove('hidden');
+    else a.classList.add('hidden');
+  });
+});
+
+// Worked example tabs
+const weTabs = document.getElementById('weTabs');
+weTabs.addEventListener('click', (e) => {
+  const tab = e.target.closest('.we-tab');
+  if (!tab) return;
+  const step = tab.dataset.step;
+  weTabs.querySelectorAll('.we-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  document.querySelectorAll('.we-step').forEach(s => s.classList.remove('active'));
+  document.querySelector(`.we-step[data-step="${step}"]`).classList.add('active');
+});
+
+// Sidebar scroll-spy
+const navLinks = document.querySelectorAll('aside.nav a');
+const sections = Array.from(document.querySelectorAll('section.block'));
+const linkMap = {};
+navLinks.forEach(a => {
+  const id = a.getAttribute('href').slice(1);
+  linkMap[id] = a;
+});
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const id = entry.target.id;
+    const link = linkMap[id];
+    if (!link) return;
+    if (entry.isIntersecting && entry.intersectionRatio > 0.15) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.15, 0.3, 0.5] });
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.swo
+
+# Editors
+.vscode/
+.idea/
+*.code-workspace
+
+# Node / pnpm (kit references monorepos that may use these)
+node_modules/
+.pnpm-store/
+.npm/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Python (kit can be transplanted into Python repos)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build / coverage
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+.git-broken/
